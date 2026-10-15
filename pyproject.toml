@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stemgen-polish-corpus"
+version = "0.1.0"
+description = "Multi-genre balanced Polish corpus generator and gold morphological ground truth compiler"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.10"
+authors = [
+    { name = "Michał Šrajer" }
+]
+dependencies = [
+    "pyarrow>=14.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/michals/stemgen-polish-corpus"
+Repository = "https://github.com/michals/stemgen-polish-corpus.git"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+stemgen-polish-corpus = "polish_corpus.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/polish_corpus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I"]
+ignore = ["ISC004", "BLE001", "F401", "E501"]

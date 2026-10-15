@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local data cache (downloaded external datasets)
+data_cache/
+
+# Output directories & artifacts
+output/
+dist/
+build/
+*.egg-info/
+*.zip
+*.parquet
+
+# Environments
+.venv/
+venv/
+ENV/
+
+# Operating System & IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.part
+.ruff_cache/
