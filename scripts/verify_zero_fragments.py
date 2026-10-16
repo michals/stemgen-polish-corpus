@@ -9,6 +9,10 @@ The script never reads writer memory — every number it checks is derived
 from stored bytes — so a passing gate means the artifacts themselves are
 clean, not that the writer agrees with itself (no self-grading).
 
+X4 detects observable residue in stored bytes; absence of salvage
+derivation (Polish-looking fragments kept from foreign words) is pinned
+by test_audit_row_leaves_no_salvage, not by this gate.
+
 Cross-checks (any mismatch fails the gate):
   X1 stored/counts agreement — the per-word TF multiset re-tokenized from
      stored docs (all genres, paradigms included) equals the GT word->tf map.
@@ -49,7 +53,7 @@ def scan_text(text: str) -> list[str]:
     for ch in text:
         if ch in ("\n", "\t"):
             continue
-        if ch == "�" or unicodedata.category(ch).startswith("C"):
+        if ch == "\ufffd" or unicodedata.category(ch).startswith("C"):
             violations.append(f"stripped-char U+{ord(ch):04X}")
         elif ch.isdigit():
             violations.append(f"digit-char {ch!r}")
@@ -179,8 +183,16 @@ def check_dist_dir(dist_dir: Path) -> GateReport:
     if report.errors:
         return report
 
-    report.genres, stored_tf = scan_corpus_zip(zip_path)
-    report.gt, gt_tf = scan_ground_truth(parquet_path)
+    try:
+        report.genres, stored_tf = scan_corpus_zip(zip_path)
+    except zipfile.BadZipFile as err:
+        report.errors.append(f"unreadable corpus.zip: {err}")
+        return report
+    try:
+        report.gt, gt_tf = scan_ground_truth(parquet_path)
+    except Exception as err:  # ArrowInvalid, ValueError (ragged columns), OSError
+        report.errors.append(f"unreadable ground_truth.parquet: {err}")
+        return report
     try:
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as err:
@@ -218,10 +230,14 @@ def print_report(report: GateReport) -> None:
     """Print per-genre fragment counts, measured rates, and cross-checks."""
     for genre in sorted(report.genres):
         scan = report.genres[genre]
-        rate = (len(scan.violations) / scan.tokens) if scan.tokens else 0.0
+        # Token-channel rate only (comparable to writer foreign_fragment_rate);
+        # char-level findings (foreign-char/digit-char/stripped-char) are counted
+        # separately below since they are not denominated in tokens.
+        tok_viol = sum(1 for v in scan.violations if v.startswith("invalid-token"))
+        rate = (tok_viol / scan.tokens) if scan.tokens else 0.0
         print(
             f"[Verify] genre {genre}: docs={scan.docs} tokens={scan.tokens} "
-            f"fragments={len(scan.violations)} rate={rate:.6f}"
+            f"fragments={len(scan.violations)} token_rate={rate:.6f}"
         )
         for violation in scan.violations[:10]:
             print(f"[Verify]   violation: {violation}")

@@ -271,6 +271,8 @@ Representative, balanced corpus for generic Polish language stemming and retriev
                 "tier": tier.name,
                 "elapsed_seconds": round(time.perf_counter() - t0, 2),
                 "summary": corpus_summary,
+                # Top-level copy mirrors summary["audit_rates"] for direct
+                # gate/consumer access; both reference the same writer dict.
                 "audit_rates": corpus_summary["audit_rates"],
             },
             indent=2,

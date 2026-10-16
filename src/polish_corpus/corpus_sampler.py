@@ -12,6 +12,7 @@ import zipfile
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from .config import GENRE_CONFIG
 from .text_cleaning import audit_clean, clean_text, tokenize
@@ -165,7 +166,7 @@ class BalancedCorpusWriter:
         """Close the zip archive."""
         self.zip_file.close()
 
-    def summary(self) -> dict[str, any]:
+    def summary(self) -> dict[str, Any]:
         """Return compilation summary metrics."""
         global_counts: Counter = Counter()
         for genre_counts in self.audit_counts.values():
