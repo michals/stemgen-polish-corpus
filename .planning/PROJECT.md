@@ -84,6 +84,7 @@ fragments for stemgen to train on.
 |----------|-----------|---------|
 | Strict Polish-only: drop tokens/sentences with non-Polish diacritics | Prevent fragment generation at the source; matches Polish-stemmer training goal | — Pending |
 | Drop OOV rows (no `(word, word)` identity GT) | Self-lemma rows teach stemmer identity mappings — rescoped 2026-10-16: GT export untouched, issue moved to `ground-truth-issues.md` handoff | ⚠️ Revisit (upstream) |
+| Token-level drop for foreign AND alphanumeric tokens (no sentence-drop, no letter-part salvage) | Simplest; preserves surrounding Polish signal for training; affected share too small to move stemmer quality | — Pending |
 | Drop pure-numeric/alphanumeric tokens from TF/DF | `COVID-19→COVID` truncation is the same bug class as diacritics | — Pending |
 | Corpus files only; GT issues documented not implemented | Owner: this project ships `corpus.zip`, upstream owns GT/stemmer; no cross-repo modifications | — Pending |
 | Scope A through D in one project | Audit phases are interdependent (cleaning + counting + GT must agree) | — Pending |
