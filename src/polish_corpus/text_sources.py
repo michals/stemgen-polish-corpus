@@ -20,6 +20,43 @@ from pathlib import Path
 from .config import CACHE_DIR
 from .corpus_sampler import chunk_text_stream
 
+# Wolne Lektury export boilerplate: headers, footers, chapter markers,
+# page numbers, separators, editor notes, end markers.
+_BOILERPLATE_RES = (
+    re.compile(r"^\s*(rozdzia[łl]|[rc]zapter|c[zr]ęść|tom|ksi[ęe]ga|pie[śs][ńn])\b[\s\divxlc]*\.?\s*$", re.I),
+    re.compile(r"^\s*[MDCLXVI]+\.?\s*$"),
+    re.compile(r"^\s*\d+\s*$"),
+    re.compile(r"^\s*([*=\-#~_])\1{2,}\s*$"),
+    re.compile(r"^\s*(przypis|uwaga|przyp\.)\b", re.I),
+    re.compile(r"\*\*\*\s*(koniec|end)", re.I),
+)
+
+_BOILERPLATE_SUBSTRINGS = (
+    "Udostępnione przez",
+    "Czytaj dalej",
+    "Pobierz",
+    "ISBN",
+    "Wolne Lektury",
+    "Ten utwór",
+)
+
+
+def _is_boilerplate(line: str) -> bool:
+    """Return True if a Wolne Lektury line is export boilerplate, not prose."""
+    if not line:
+        return False
+    for sub in _BOILERPLATE_SUBSTRINGS:
+        if sub in line:
+            return True
+    # Structural patterns only apply to short lines so mid-sentence
+    # prose mentioning rozdział is never dropped.
+    if len(line) >= 80:
+        return False
+    try:
+        return any(rx.search(line) for rx in _BOILERPLATE_RES)
+    except re.error:
+        return False
+
 
 def _stream_nkjp_sentences(jsonl_gz_path: Path, channel_prefixes: tuple[str, ...]) -> Iterator[str]:
     """Stream reassembled sentences from NKJP1M jsonl.gz matching channel prefixes."""
@@ -82,9 +119,7 @@ def iter_literature_docs(max_docs: int) -> Iterator[str]:
                 with open(book_file, encoding="utf-8", errors="replace") as f:
                     for line in f:
                         line = line.strip()
-                        if "Ten utwór nie jest objęty prawem autorskim" in line:
-                            continue
-                        if "ISBN " in line or "Wolne Lektury" in line:
+                        if _is_boilerplate(line):
                             continue
                         if len(line) > 20:
                             yield line

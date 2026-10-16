@@ -8,6 +8,7 @@ import polish_corpus.text_sources as text_sources
 from polish_corpus.corpus_sampler import chunk_text_stream
 from polish_corpus.text_cleaning import clean_text, tokenize
 from polish_corpus.text_sources import (
+    _is_boilerplate,
     iter_literature_docs,
     iter_news_docs,
     iter_spoken_forum_docs,
@@ -95,3 +96,52 @@ def test_phase1_spot_checks_hold_after_url_strip(dirty: str, dropped: bool) -> N
         assert tokenize(cleaned) == ["słowo", "inne"]
     else:
         assert tokenize(cleaned) == ["słowo", dirty, "inne"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Ten utwór nie jest objęty prawem autorskim",
+        "ISBN 978-83-123456-7-8 udostępniony przez wydawcę",
+        "Tekst opracowany przez Wolne Lektury",
+        "Udostępnione przez Fundację Nowoczesna Polska",
+        "Czytaj dalej na stronie biblioteki internetowej",
+        "Pobierz ebook w formacie PDF na czytnik",
+        "ROZDZIAŁ III",
+        "Rozdział 7",
+        "CZĘŚĆ II",
+        "Tom II",
+        "Księga II",
+        "XVII",
+        "27",
+        "***",
+        "===",
+        "*** KONIEC ***",
+        "Przypis: zobacz objaśnienia wydawcy na końcu tomu",
+        "Uwaga edytora: pisownia uwspółcześniona",
+    ],
+)
+def test_boilerplate_lines_drop(line: str) -> None:
+    """Verify WL export boilerplate lines are classified as boilerplate."""
+    assert _is_boilerplate(line) is True
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "W trzecim rozdziale bohater postanowił opuścić rodzinne miasto o świcie",
+        "Janusz stał pod arkadami kamienicy, wpatrując się w ciemną toń rzeki",
+        "Rozdział ten zapamiętał na długo, bo opowiadał o dawnych dziejach miasta",
+        "Siedemnasty dzień podróży minął im spokojnie wśród zielonych wzgórz",
+    ],
+)
+def test_prose_with_boilerplate_words_retained(line: str) -> None:
+    """Verify mid-sentence prose mentioning rozdział survives the filter."""
+    assert _is_boilerplate(line) is False
+
+
+def test_is_boilerplate_never_raises() -> None:
+    """Verify the helper is lenient on weird input."""
+    assert _is_boilerplate("") is False
+    assert _is_boilerplate("   ") is False
+    assert _is_boilerplate("x" * 500) is False
