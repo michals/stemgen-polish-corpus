@@ -8,21 +8,18 @@ Implements Step 2 of general_polish_corpus_strategy.md:
 
 from __future__ import annotations
 
-import re
 import zipfile
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
 
 from .config import GENRE_CONFIG
-
-# Tokenization pattern matching valid Polish word tokens
-TOKEN_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(?:-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)?")
+from .text_cleaning import clean_text, tokenize
 
 
 def count_words(text: str) -> int:
     """Return count of alphabetic word tokens in text."""
-    return len(TOKEN_RE.findall(text))
+    return len(tokenize(text))
 
 
 def chunk_text_stream(
@@ -72,6 +69,9 @@ class BalancedCorpusWriter:
 
     def add_document(self, genre: str, text: str) -> str:
         """Add a single natural document to the zip archive under genre directory."""
+        # Single choke-point gate: clean BEFORE both the archive write and
+        # TF/DF counting so stored docs and counts agree by construction.
+        text = clean_text(text)
         if genre not in self.doc_counts:
             self.doc_counts[genre] = 0
             self.token_counts[genre] = 0
@@ -80,7 +80,7 @@ class BalancedCorpusWriter:
         doc_idx = self.doc_counts[genre]
         filename = f"{genre}/doc_{doc_idx:05d}.txt"
 
-        tokens = [t.lower() for t in TOKEN_RE.findall(text)]
+        tokens = [t.lower() for t in tokenize(text)]
         token_count = len(tokens)
         self.token_counts[genre] += token_count
 
