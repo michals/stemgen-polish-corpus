@@ -3,14 +3,15 @@
 ## What This Is
 
 Hardening pass on `stemgen-polish-corpus` (per `quality-audit.md`): add a real text-cleaning
-stage, align tokenizers, and clean ground-truth exports so foreign diacritics and other
-noise stop leaking into stemgen stemmer training. For the stemgen project (Michał), validated
-by a full-tier rebuild with audit stats showing zero foreign fragments.
+stage, align token counting, and harden sources so foreign diacritics and other
+noise stop leaking into the `corpus.zip` files stemgen trains on. GT quality issues are
+documented in a handoff file for the upstream project, not fixed here. For the stemgen
+project (Michał), validated by a full-tier rebuild with audit stats showing zero foreign fragments.
 
 ## Core Value
 
-Corpus docs and ground truth contain only valid Polish word tokens — no truncated foreign
-fragments training the stemmer toward garbage stems.
+Corpus docs contain only valid Polish word tokens — no truncated foreign
+fragments for stemgen to train on.
 
 ## Requirements
 
@@ -25,19 +26,21 @@ fragments training the stemmer toward garbage stems.
 ### Active
 
 - [ ] Strict Polish-only text cleaning stage (`clean_text()`) applied before archive write and TF/DF counting
-- [ ] Single shared tokenizer/validator used by sampler, GT export, and documented for stemgen
+- [ ] Single shared tokenizer/validator used by the sampler for all counting, documented as a reuse contract for stemgen (docs only)
 - [ ] Foreign-fragment elimination: no `é/è/ü/ö/ç/č/ñ/ø/...` split artifacts (e.g. `ziera`, `bner`, `caf`) in docs or TF/DF
 - [ ] OOV ground-truth hygiene: tokens with no Morfeusz lemma are dropped (no silent `(word, word)` identity rows)
 - [ ] Numeric policy: pure-numeric and alphanumeric tokens (`2012`, `COVID-19`, `model3`) excluded from TF/DF
 - [ ] Quote/dash/punctuation normalization (`„ ” « » — –`) and `�`/control-char stripping
 - [ ] Source hardening: stronger Wolne Lektury boilerplate filtering, HTML-unescape for news/wiki, URL handling, `iter_*_docs` dedup guard
-- [ ] Audit stats in `build_summary.json` (`oov_self_lemma_rate`, `foreign_fragment_rate`, `digit_token_rate`)
+- [ ] Corpus audit rates in `build_summary.json` (`foreign_fragment_rate`, `digit_token_rate`, per-genre)
 - [ ] Regression tests with audit fixture table (`Béziera`, `Schrödinger`, `Saint-Étienne-la-Geneste`, `café`, `COVID-19`, ...)
 - [ ] Full-tier rebuild verification showing zero foreign fragments
+- [ ] `ground-truth-issues.md` handoff doc capturing GT quality issues for the upstream project (documented, not implemented)
 
 ### Out of Scope
 
-- Stemgen stemmer changes themselves — this project only fixes its corpus inputs — why: separate repo/owner
+- Stemgen stemgen repo changes of any kind — tokenizer contract is documentation-only — why: separate repo/owner, explicit owner constraint
+- Ground-truth export code changes (OOV drop, `lemma=NULL`) — why: documented in `ground-truth-issues.md` for the upstream project; this milestone ships corpus files only
 - New corpus genres or data sources — why: quality pass, not expansion
 - Non-Polish language support or transliteration of foreign names — why: strict Polish-only decision
 
@@ -80,8 +83,9 @@ fragments training the stemmer toward garbage stems.
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Strict Polish-only: drop tokens/sentences with non-Polish diacritics | Prevent fragment generation at the source; matches Polish-stemmer training goal | — Pending |
-| Drop OOV rows (no `(word, word)` identity GT) | Self-lemma rows teach stemgen identity mappings for noise | — Pending |
+| Drop OOV rows (no `(word, word)` identity GT) | Self-lemma rows teach stemmer identity mappings — rescoped 2026-10-16: GT export untouched, issue moved to `ground-truth-issues.md` handoff | ⚠️ Revisit (upstream) |
 | Drop pure-numeric/alphanumeric tokens from TF/DF | `COVID-19→COVID` truncation is the same bug class as diacritics | — Pending |
+| Corpus files only; GT issues documented not implemented | Owner: this project ships `corpus.zip`, upstream owns GT/stemmer; no cross-repo modifications | — Pending |
 | Scope A through D in one project | Audit phases are interdependent (cleaning + counting + GT must agree) | — Pending |
 | Verify via full-tier rebuild + audit stats | Unit tests alone can't prove zero fragments at corpus scale | — Pending |
 
