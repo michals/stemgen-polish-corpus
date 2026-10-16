@@ -44,7 +44,12 @@ def _drop_token(token: str) -> bool:
         # 1. Any digit kills the whole token (2012, COVID-19, model3).
         if ch.isdigit():
             return True
-        # 2. Any non-Polish letter kills the whole token (é in café,
+        # 2. Any combining mark kills the whole token: marks without an NFC
+        #    precomposition (or introduced post-NFC via entities) must never
+        #    leave their base letters behind as salvageable fragments.
+        if unicodedata.category(ch).startswith("M"):
+            return True
+        # 3. Any non-Polish letter kills the whole token (é in café,
         #    É in Saint-Étienne). Punctuation attached to a Polish word
         #    (commas, quotes) is not a letter and does not trigger a drop.
         if unicodedata.category(ch).startswith("L") and not _is_polish_letter(ch):
@@ -82,17 +87,23 @@ def clean_text(text: str) -> str:
     # 1. NFC normalize FIRST so NFD combining marks cannot evade the
     #    Polish-class test below.
     cleaned = unicodedata.normalize("NFC", text)
-    # 2. Strip U+FFFD and control chars (keep newline/tab) BEFORE unescaping.
+    # 2. Decode HTML entities BEFORE the strip and filter, so decoded
+    #    controls/FFFD/combining marks still face the NFC + strip + filter
+    #    steps below.
+    cleaned = html.unescape(cleaned)
+    # 3. Re-normalize: unescape can introduce decomposed sequences (e.g. e
+    #    + U+0301 from &#769;) that must compose BEFORE the foreign-token
+    #    filter.
+    cleaned = unicodedata.normalize("NFC", cleaned)
+    # 4. Strip U+FFFD and control chars (keep newline/tab) AFTER unescaping,
+    #    so encoded forms (&#0;, &#xFFFD;) cannot reintroduce stripped chars.
     cleaned = "".join(
         ch
         for ch in cleaned
         if ch in ("\n", "\t")
         or (ch != "\ufffd" and not unicodedata.category(ch).startswith("C"))
     )
-    # 3. Decode HTML entities BEFORE the foreign-token filter, so that
-    #    &eacute; becomes é and is then dropped, not passed through.
-    cleaned = html.unescape(cleaned)
-    # 4. Token-level DROP on whitespace-delimited tokens: the whole token
+    # 5. Token-level DROP on whitespace-delimited tokens: the whole token
     #    vanishes, no letter-part salvage (Béziera drops entirely, never
     #    B+ziera; café never caf; COVID-19 never COVID). Whitespace
     #    separators are preserved so paragraph breaks survive.
@@ -101,11 +112,11 @@ def clean_text(text: str) -> str:
         if not part or part[0].isspace() or not _drop_token(part):
             kept_parts.append(part)
     cleaned = "".join(kept_parts)
-    # 5. Quote/dash normalization AFTER the filter (never launder dropped
+    # 6. Quote/dash normalization AFTER the filter (never launder dropped
     #    tokens back into countable text).
     for old, new in _QUOTE_REPLACEMENTS:
         cleaned = cleaned.replace(old, new)
-    # 6. Collapse whitespace, preserving paragraph breaks.
+    # 7. Collapse whitespace, preserving paragraph breaks.
     cleaned = re.sub(r"[^\S\n]+", " ", cleaned)
     cleaned = re.sub(r"[ ]*\n[ ]*", "\n", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)

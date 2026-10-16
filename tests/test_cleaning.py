@@ -89,6 +89,30 @@ def test_control_and_fffd_stripped() -> None:
     assert "\n" in with_newline
 
 
+def test_entity_encoded_combining_mark_drops_whole() -> None:
+    """Verify cafe&#769; (entity-encoded combining acute) vanishes whole."""
+    cleaned = clean_text("słowo cafe&#769; inne")
+    assert "cafe" not in tokenize(cleaned)
+    assert "cafe" not in cleaned
+    assert tokenize(cleaned) == ["słowo", "inne"]
+
+
+def test_non_composable_decomposed_sequence_drops_whole() -> None:
+    """Verify a combining mark with no NFC precomposition drops the token."""
+    # q + U+0301 + x: NFC has no precomposition for q + acute, so the
+    # combining mark survives to the token filter, which must drop it.
+    decomposed = "q" + chr(0x301) + "x"
+    assert decomposed != "qx"  # guard: fixture really carries a mark
+    cleaned = clean_text(f"słowo {decomposed} inne")
+    assert tokenize(cleaned) == ["słowo", "inne"]
+
+
+@pytest.mark.parametrize("encoded", ["słowo &#0; inne", "słowo &#xFFFD; inne"])
+def test_encoded_stripped_chars_stay_stripped(encoded: str) -> None:
+    """Verify char refs of stripped chars decode then face the strip."""
+    assert clean_text(encoded) == "słowo inne"
+
+
 def test_quote_dash_normalization_without_resurrection() -> None:
     """Verify quote/dash variants normalize and never launder dropped tokens."""
     assert clean_text("„cytat”") == '"cytat"'
