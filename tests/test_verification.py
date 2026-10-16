@@ -99,3 +99,83 @@ def test_empty_after_clean_records_drops_without_quota(tmp_path) -> None:
 def test_clean_text_delegates_to_audit_clean(dirty: str) -> None:
     """Verify clean_text output is identical to the audit_clean text channel."""
     assert audit_clean(dirty)[0] == clean_text(dirty)
+
+
+# Audit-trace consolidation (quality-audit.md §2, all 14 rows).
+#
+# Existing batteries already pin most rows at clean_text() level — referenced
+# here, not duplicated:
+#   - Béziera / café / COVID-19 → test_cleaning.py::test_foreign_tokens_drop_whole
+#   - Schrödinger, Besançon, Turčianske, Corrèze, Hübner, Maréchal,
+#     désintéressement, Führer, naïve, Linköping,
+#     Saint-Étienne-la-Geneste → test_cleaning.py::test_audit_drop_fixtures_vanish_whole
+# What this table adds per RESEARCH §2: (1) an explicit audit-row case ID per
+# row so completeness is mechanically checkable; (2) no-salvage pins naming
+# the historic TOKEN_RE fragments from the audit table, asserted at the
+# correct level — non-generation via tokenize(clean_text(dirty)), never
+# is_valid_token() on Polish-class fragments (e.g. is_valid_token("ziera")
+# is correctly True; the guarantee is that "ziera" is never generated);
+# (3) gap-fill variants absent from test_cleaning.py (Turčianske Teplice,
+# Mein Führer, Anthé).
+@pytest.mark.parametrize(
+    ("dirty", "expected", "forbidden"),
+    [
+        pytest.param("Béziera", ["słowo", "inne"], ("B", "ziera", "Béziera"), id="audit-Beziera"),
+        pytest.param("Besançon", ["słowo", "inne"], ("Besan", "on", "Besançon"), id="audit-Besancon"),
+        pytest.param(
+            "Turčianske", ["słowo", "inne"], ("Tur", "ianske", "Turčianske"), id="audit-Turcianske"
+        ),
+        pytest.param(
+            "Saint-Étienne-la-Geneste",
+            ["słowo", "inne"],
+            ("Saint", "tienne-la", "tienne", "Geneste", "Étienne"),
+            id="audit-Saint-Etienne-la-Geneste",
+        ),
+        pytest.param("Corrèze", ["słowo", "inne"], ("Corr", "ze", "Corrèze"), id="audit-Correze"),
+        pytest.param(
+            "Schrödinger", ["słowo", "inne"], ("Schr", "dinger", "Schrödinger"), id="audit-Schrodinger"
+        ),
+        pytest.param("Hübner", ["słowo", "inne"], ("H", "bner", "Hübner"), id="audit-Hubner"),
+        pytest.param("Maréchal", ["słowo", "inne"], ("Mar", "chal", "Maréchal"), id="audit-Marechal"),
+        pytest.param(
+            "désintéressement",
+            ["słowo", "inne"],
+            ("d", "sint", "ressement", "désintéressement"),
+            id="audit-desinteressement",
+        ),
+        pytest.param("Führer", ["słowo", "inne"], ("F", "hrer", "Führer"), id="audit-Fuhrer"),
+        pytest.param("café", ["słowo", "inne"], ("caf", "café"), id="audit-cafe"),
+        pytest.param("naïve", ["słowo", "inne"], ("na", "ve", "naïve"), id="audit-naive"),
+        pytest.param("COVID-19", ["słowo", "inne"], ("COVID", "COVID-19"), id="audit-COVID-19"),
+        pytest.param(
+            "Linköping", ["słowo", "inne"], ("Link", "ping", "Linköping"), id="audit-Linkoping"
+        ),
+        # Gap-fill variants (§3 source evidence, not in test_cleaning.py).
+        pytest.param(
+            "Turčianske Teplice",
+            ["słowo", "Teplice", "inne"],
+            ("Tur", "ianske", "Turčianske"),
+            id="audit-variant-Turcianske-Teplice",
+        ),
+        pytest.param(
+            "Mein Führer",
+            ["słowo", "Mein", "inne"],
+            ("F", "hrer", "Führer"),
+            id="audit-variant-Mein-Fuhrer",
+        ),
+        pytest.param("Anthé", ["słowo", "inne"], ("Anth", "Anthé"), id="audit-variant-Anthe"),
+    ],
+)
+def test_audit_row_leaves_no_salvage(dirty: str, expected: list[str], forbidden: tuple[str, ...]) -> None:
+    """Verify each audit §2 row drops whole with none of its historic fragments generated."""
+    cleaned = clean_text(f"słowo {dirty} inne")
+    leftovers = tokenize(cleaned)
+    assert leftovers == expected
+    for fragment in forbidden:
+        # Exact-token absence: the fragment was never generated as a token.
+        assert fragment not in leftovers
+        # Substring absence for longer fragments: no salvage hides inside text.
+        # (Skipped for 1-2 char fragments like "H"/"on"/"ze"/"na"/"ve", where
+        # substring matching would be noise — exact-token absence pins those.)
+        if len(fragment) >= 3:
+            assert fragment not in cleaned
