@@ -18,13 +18,13 @@ code and no changes to the stemgen repo — GT issues are documented in a handof
 
 - [x] **TOK-01**: A single shared `TOKEN_RE` + `is_valid_token()` (new `text_cleaning.py`) is used by the sampler for all counting — stored docs and TF/DF agree by construction
 - [x] **TOK-02**: Pure-numeric and alphanumeric tokens (`2012`, `COVID-19`, `model3`) are excluded from TF/DF counts
-- [ ] **TOK-03**: The shared tokenizer/validator is documented as a contract the stemgen side can reuse — documentation only, no modification of the stemgen repo
+- [x] **TOK-03**: The shared tokenizer/validator is documented as a contract the stemgen side can reuse — documentation only, no modification of the stemgen repo
 
 ### Source Hardening
 
-- [ ] **SRC-01**: `iter_*_docs` iterators use a content-hash seen-guard so small sources are never re-yielded (no duplicate docs, no DF skew)
-- [ ] **SRC-02**: Wolne Lektury filtering extends beyond `Ten utwór…/ISBN/Wolne Lektury` to headers/footers, chapter markers, and page numbers
-- [ ] **SRC-03**: News/wiki paths handle URLs and e-mail addresses (strip or exclude from counts) instead of passing them through raw
+- [x] **SRC-01**: `iter_*_docs` iterators use a content-hash seen-guard so small sources are never re-yielded (no duplicate docs, no DF skew)
+- [x] **SRC-02**: Wolne Lektury filtering extends beyond `Ten utwór…/ISBN/Wolne Lektury` to headers/footers, chapter markers, and page numbers
+- [x] **SRC-03**: News/wiki paths handle URLs and e-mail addresses (strip or exclude from counts) instead of passing them through raw
 
 ### Verification
 
@@ -34,7 +34,7 @@ code and no changes to the stemgen repo — GT issues are documented in a handof
 
 ### Handoff Docs
 
-- [ ] **DOC-01**: GT quality issues spotted during the audit (OOV `(word, word)` self-lemma fallback in `builder.py`, proper-noun leakage into counts, `oov_self_lemma_rate` proposal) are written to a dedicated `ground-truth-issues.md` for the upstream project — documented only, not implemented here
+- [x] **DOC-01**: GT quality issues spotted during the audit (OOV `(word, word)` self-lemma fallback in `builder.py`, proper-noun leakage into counts, `oov_self_lemma_rate` proposal) are written to a dedicated `ground-truth-issues.md` for the upstream project — documented only, not implemented here
 
 ## v2 Requirements
 
@@ -69,14 +69,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLN-03 | Phase 1 | Complete |
 | TOK-01 | Phase 1 | Complete |
 | TOK-02 | Phase 1 | Complete |
-| TOK-03 | Phase 2 | Pending |
-| SRC-01 | Phase 2 | Pending |
-| SRC-02 | Phase 2 | Pending |
-| SRC-03 | Phase 2 | Pending |
+| TOK-03 | Phase 2 | Complete |
+| SRC-01 | Phase 2 | Complete |
+| SRC-02 | Phase 2 | Complete |
+| SRC-03 | Phase 2 | Complete |
 | VER-01 | Phase 3 | Pending |
 | VER-02 | Phase 3 | Pending |
 | VER-03 | Phase 3 | Pending |
-| DOC-01 | Phase 2 | Pending |
+| DOC-01 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 13 total
