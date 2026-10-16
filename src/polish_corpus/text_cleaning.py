@@ -90,7 +90,7 @@ def clean_text(text: str) -> str:
         or (ch != "\ufffd" and not unicodedata.category(ch).startswith("C"))
     )
     # 3. Decode HTML entities BEFORE the foreign-token filter, so that
-    #    &eacute; becomes e and is then filtered, not passed through.
+    #    &eacute; becomes é and is then dropped, not passed through.
     cleaned = html.unescape(cleaned)
     # 4. Token-level DROP on whitespace-delimited tokens: the whole token
     #    vanishes, no letter-part salvage (Béziera drops entirely, never
