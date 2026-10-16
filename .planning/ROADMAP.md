@@ -13,8 +13,8 @@ A hardening pass on the existing streaming corpus pipeline: first build the shar
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Cleaning Stage + Shared Tokenizer** - `clean_text()`, shared `TOKEN_RE`/`is_valid_token()`, writer-boundary gate (completed 2026-10-16)
-- [ ] **Phase 2: Source Hardening + Contracts + Handoff** - Source sanitizers, dedup guard, tokenizer contract docs, ground-truth-issues.md
-- [ ] **Phase 3: Verification** - Fixture regression tests, audit rates, full-tier rebuild gate
+- [x] **Phase 2: Source Hardening + Contracts + Handoff** - Source sanitizers, dedup guard, tokenizer contract docs, ground-truth-issues.md (completed 2026-10-16)
+- [x] **Phase 3: Verification** - Fixture regression tests, audit rates, full-tier rebuild gate
 
 ## Phase Details
 
@@ -44,7 +44,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The shared tokenizer/validator is documented as a reuse contract for the stemgen side (docs only, no stemgen repo changes)
   4. `ground-truth-issues.md` exists at the repo root capturing the OOV self-lemma fallback, proper-noun leakage, and `oov_self_lemma_rate` proposal — documented only, no GT export code changes
 
-**Plans**: TBD
+**Plans**: 02-01, 02-02
 
 ### Phase 3: Verification
 
@@ -57,7 +57,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. `build_summary.json` reports `foreign_fragment_rate`, `digit_token_rate`, and per-genre rates as the acceptance signal
   3. A full-tier rebuild shows zero foreign fragments in docs and counts (not a seed/small build)
 
-**Plans**: TBD
+**Plans**: 03-01, 03-02
 
 ## Progress
 
@@ -67,5 +67,5 @@ Phases execute sequentially: 1 → 2 → 3 (parallelization is disabled for this
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Cleaning Stage + Shared Tokenizer | 2/2 | Complete    | 2026-10-16 |
-| 2. Source Hardening + Contracts + Handoff | 0/TBD | Not started | - |
-| 3. Verification | 0/TBD | Not started | - |
+| 2. Source Hardening + Contracts + Handoff | 2/2 | Complete    | 2026-10-16 |
+| 3. Verification | 2/2 | Complete | 2026-10-16 |
