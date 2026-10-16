@@ -69,6 +69,12 @@ Recent decisions affecting current work:
 
 None yet.
 
+### Quick Tasks Completed
+
+| Date | Task | Commit | Status |
+|------|------|--------|--------|
+| 2026-10-16 | Tier rename compact/recommended/extended → sm/md/lg | f0bff69 | complete ✓ |
+
 ### Blockers/Concerns
 
 None yet.
