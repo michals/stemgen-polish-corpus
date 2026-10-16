@@ -19,8 +19,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--tier",
         choices=list(TIERS.keys()),
-        default="recommended",
-        help="Corpus size tier: compact (~2.4M tokens), recommended (~5.5M tokens), extended (~13.4M tokens)",
+        default="md",
+        help="Corpus size tier: sm (~2.4M tokens), md (~5.5M tokens), lg (~13.4M tokens)",
     )
     parser.add_argument(
         "--output-dir",

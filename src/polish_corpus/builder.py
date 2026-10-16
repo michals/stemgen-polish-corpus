@@ -1,7 +1,7 @@
 """Unified orchestrator for Polish General Corpus building.
 
 Usage:
-  python builder.py --tier compact --output-dir dist/general
+  python builder.py --tier sm --output-dir dist/general
   python builder.py --quick-test
 """
 
@@ -92,14 +92,14 @@ def generate_seed_documents(genre: str, target_docs: int) -> list[str]:
 
 
 def build_polish_corpus(
-    tier_name: str = "recommended",
+    tier_name: str = "md",
     output_dir: Path | str | None = None,
     polimorf_path: Path | None = None,
     quick_test: bool = False,
     force_download: bool = False,
 ) -> int:
     """Build the complete general Polish corpus package according to the strategy."""
-    tier: TierConfig = TIERS.get(tier_name, TIERS["recommended"])
+    tier: TierConfig = TIERS.get(tier_name, TIERS["md"])
     out_dir = get_default_output_dir(tier.name) if output_dir is None else Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

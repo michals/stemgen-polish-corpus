@@ -7,17 +7,17 @@ from polish_corpus.config import TIERS, TierConfig
 
 def test_package_exports() -> None:
     """Verify package configuration and tiers are exposed."""
-    assert "recommended" in TIERS
-    assert "compact" in TIERS
-    assert "extended" in TIERS
-    assert isinstance(TIERS["recommended"], TierConfig)
+    assert "md" in TIERS
+    assert "sm" in TIERS
+    assert "lg" in TIERS
+    assert isinstance(TIERS["md"], TierConfig)
 
 
 def test_default_tier_subdir() -> None:
     """Verify default output directory nests by tier name."""
     from polish_corpus.config import get_default_output_dir
-    p = get_default_output_dir("recommended")
-    assert p.name == "recommended"
+    p = get_default_output_dir("md")
+    assert p.name == "md"
     assert p.parent.name == "dist"
 
 
@@ -26,7 +26,7 @@ def test_quick_test_run(tmp_path) -> None:
     pytest.importorskip("pyarrow", reason="pyarrow required for parquet export")
     out_dir = tmp_path / "output"
     exit_code = build_polish_corpus(
-        tier_name="recommended",
+        tier_name="md",
         output_dir=out_dir,
         quick_test=True,
     )

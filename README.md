@@ -31,9 +31,9 @@ A reproducible, standalone data pipeline for compiling balanced, multi-genre gen
 
 | Tier | Target Docs | Target Tokens | Unique Vocabulary ($|V|$) | Paradigms Completed | ZIP Size |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **`compact`** | 4,400 | ~2.4M | ~264,000 | Top 5,000 | ~10 MB |
-| **`recommended`** | 10,100 | ~5.5M | ~421,000 | Top 10,000 | ~23 MB |
-| **`extended`** | 25,000 | ~13.4M | ~523,000 | Top 15,000 | ~56 MB |
+| **`sm`** | 4,400 | ~2.4M | ~264,000 | Top 5,000 | ~10 MB |
+| **`md`** | 10,100 | ~5.5M | ~421,000 | Top 10,000 | ~23 MB |
+| **`lg`** | 25,000 | ~13.4M | ~523,000 | Top 15,000 | ~56 MB |
 
 ---
 
@@ -74,32 +74,32 @@ stemgen-polish-corpus --quick-test
 # or: python -m polish_corpus --quick-test
 ```
 
-### 2. Build Recommended Corpus (~5.5M tokens, 421k vocabulary)
-Generates into `./dist/recommended/` by default:
+### 2. Build MD Corpus (~5.5M tokens, 421k vocabulary)
+Generates into `./dist/md/` by default:
 ```bash
-stemgen-polish-corpus --tier recommended
+stemgen-polish-corpus --tier md
 # or simply: stemgen-polish-corpus
 ```
 
-### 3. Build Compact Tier (Fast / CI Profile)
-Generates into `./dist/compact/` by default:
+### 3. Build SM Tier (Fast / CI Profile)
+Generates into `./dist/sm/` by default:
 ```bash
-stemgen-polish-corpus --tier compact
+stemgen-polish-corpus --tier sm
 ```
 
-### 4. Build Extended Tier (Exhaustive Profile)
-Generates into `./dist/extended/` by default:
+### 4. Build LG Tier (Exhaustive Profile)
+Generates into `./dist/lg/` by default:
 ```bash
-stemgen-polish-corpus --tier extended
+stemgen-polish-corpus --tier lg
 ```
 
 ---
 
 ## Output Structure
 
-Each tier directory (e.g. `dist/recommended/`, `dist/compact/`, `dist/extended/`) contains:
+Each tier directory (e.g. `dist/md/`, `dist/sm/`, `dist/lg/`) contains:
 ```text
-dist/recommended/
+dist/md/
 ├── corpus.zip                       # Hierarchical ZIP of ~500-word .txt docs
 ├── ground_truth.parquet             # Full ground truth (word, lemma, tf, df)
 ├── ground_truth_train.parquet       # 80% lemma-stratified training partition

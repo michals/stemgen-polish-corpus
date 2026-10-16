@@ -264,11 +264,11 @@ def print_report(report: GateReport) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry: run the gate against ``--dist-dir`` (default dist/compact)."""
+    """CLI entry: run the gate against ``--dist-dir`` (default dist/sm)."""
     parser = argparse.ArgumentParser(description="Zero-foreign-fragment gate for built tiers.")
     parser.add_argument(
         "--dist-dir",
-        default="dist/compact",
+        default="dist/sm",
         help="Build output dir holding corpus.zip + parquet + summary",
     )
     args = parser.parse_args(argv)

@@ -22,7 +22,7 @@ DEFAULT_OUTPUT_BASE = (Path.cwd() / "dist").resolve()
 
 
 def get_default_output_dir(tier_name: str) -> Path:
-    """Return default output directory nested by tier name (e.g. ./dist/recommended)."""
+    """Return default output directory nested by tier name (e.g. ./dist/md)."""
     return DEFAULT_OUTPUT_BASE / tier_name
 
 
@@ -95,20 +95,20 @@ class TierConfig:
 
 
 TIERS = {
-    "compact": TierConfig(
-        name="compact",
+    "sm": TierConfig(
+        name="sm",
         target_tokens=2_200_000,
         target_docs=4_400,
         top_lemmas_for_paradigms=5_000,
     ),
-    "recommended": TierConfig(
-        name="recommended",
+    "md": TierConfig(
+        name="md",
         target_tokens=5_150_000,
         target_docs=10_100,
         top_lemmas_for_paradigms=10_000,
     ),
-    "extended": TierConfig(
-        name="extended",
+    "lg": TierConfig(
+        name="lg",
         target_tokens=12_500_000,
         target_docs=25_000,
         top_lemmas_for_paradigms=15_000,
