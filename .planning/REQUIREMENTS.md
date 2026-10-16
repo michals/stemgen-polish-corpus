@@ -10,14 +10,14 @@ code and no changes to the stemgen repo — GT issues are documented in a handof
 
 ### Cleaning
 
-- [ ] **CLN-01**: Pipeline applies a `clean_text()` stage (NFC → strip `�`/control chars → HTML-unescape → foreign-token policy → quote/dash normalization → whitespace collapse) before archive write AND before TF/DF counting
-- [ ] **CLN-02**: Strict Polish-only policy drops tokens/sentences containing non-Polish diacritics (`é/è/ü/ö/ç/č/ñ/ø/…`, Cyrillic) so no split fragments (`ziera`, `bner`, `caf`) enter docs or counts
-- [ ] **CLN-03**: HTML entities are unescaped BEFORE the foreign-token check (order is load-bearing: `&eacute;` decodes to `é` and must then hit the filter)
+- [x] **CLN-01**: Pipeline applies a `clean_text()` stage (NFC → strip `�`/control chars → HTML-unescape → foreign-token policy → quote/dash normalization → whitespace collapse) before archive write AND before TF/DF counting
+- [x] **CLN-02**: Strict Polish-only policy drops tokens/sentences containing non-Polish diacritics (`é/è/ü/ö/ç/č/ñ/ø/…`, Cyrillic) so no split fragments (`ziera`, `bner`, `caf`) enter docs or counts
+- [x] **CLN-03**: HTML entities are unescaped BEFORE the foreign-token check (order is load-bearing: `&eacute;` decodes to `é` and must then hit the filter)
 
 ### Tokenizer
 
-- [ ] **TOK-01**: A single shared `TOKEN_RE` + `is_valid_token()` (new `text_cleaning.py`) is used by the sampler for all counting — stored docs and TF/DF agree by construction
-- [ ] **TOK-02**: Pure-numeric and alphanumeric tokens (`2012`, `COVID-19`, `model3`) are excluded from TF/DF counts
+- [x] **TOK-01**: A single shared `TOKEN_RE` + `is_valid_token()` (new `text_cleaning.py`) is used by the sampler for all counting — stored docs and TF/DF agree by construction
+- [x] **TOK-02**: Pure-numeric and alphanumeric tokens (`2012`, `COVID-19`, `model3`) are excluded from TF/DF counts
 - [ ] **TOK-03**: The shared tokenizer/validator is documented as a contract the stemgen side can reuse — documentation only, no modification of the stemgen repo
 
 ### Source Hardening
@@ -64,11 +64,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLN-01 | Phase 1 | Pending |
-| CLN-02 | Phase 1 | Pending |
-| CLN-03 | Phase 1 | Pending |
-| TOK-01 | Phase 1 | Pending |
-| TOK-02 | Phase 1 | Pending |
+| CLN-01 | Phase 1 | Complete |
+| CLN-02 | Phase 1 | Complete |
+| CLN-03 | Phase 1 | Complete |
+| TOK-01 | Phase 1 | Complete |
+| TOK-02 | Phase 1 | Complete |
 | TOK-03 | Phase 2 | Pending |
 | SRC-01 | Phase 2 | Pending |
 | SRC-02 | Phase 2 | Pending |

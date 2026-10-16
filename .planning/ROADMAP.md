@@ -12,13 +12,14 @@ A hardening pass on the existing streaming corpus pipeline: first build the shar
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Cleaning Stage + Shared Tokenizer** - `clean_text()`, shared `TOKEN_RE`/`is_valid_token()`, writer-boundary gate
+- [x] **Phase 1: Cleaning Stage + Shared Tokenizer** - `clean_text()`, shared `TOKEN_RE`/`is_valid_token()`, writer-boundary gate (completed 2026-10-16)
 - [ ] **Phase 2: Source Hardening + Contracts + Handoff** - Source sanitizers, dedup guard, tokenizer contract docs, ground-truth-issues.md
 - [ ] **Phase 3: Verification** - Fixture regression tests, audit rates, full-tier rebuild gate
 
 ## Phase Details
 
 ### Phase 1: Cleaning Stage + Shared Tokenizer
+
 **Goal**: Corpus text is cleaned through a single shared stage so stored docs and TF/DF counts contain only valid Polish tokens
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
@@ -28,9 +29,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Tokens/sentences with non-Polish diacritics are dropped — no `ziera`/`bner`/`caf`-class split fragments in docs or counts
   3. HTML entities decode before the foreign-token check (`&eacute;` becomes `é` and is then filtered, not passed through)
   4. Pure-numeric and alphanumeric tokens (`2012`, `COVID-19`, `model3`) are excluded from TF/DF while valid Polish (including `biało-czerwony`) is retained
+
 **Plans**: TBD
 
 ### Phase 2: Source Hardening + Contracts + Handoff
+
 **Goal**: Source generators emit sanitized, deduplicated docs and downstream contracts are documented for stemgen and upstream owners
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -40,9 +43,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Wolne Lektury docs are free of headers/footers, chapter markers, and page numbers; news/wiki URLs and e-mail addresses are stripped or excluded from counts instead of passing through raw
   3. The shared tokenizer/validator is documented as a reuse contract for the stemgen side (docs only, no stemgen repo changes)
   4. `ground-truth-issues.md` exists at the repo root capturing the OOV self-lemma fallback, proper-noun leakage, and `oov_self_lemma_rate` proposal — documented only, no GT export code changes
+
 **Plans**: TBD
 
 ### Phase 3: Verification
+
 **Goal**: Corpus-scale cleanliness is proven by tests, audit stats, and a full-tier rebuild with zero foreign fragments
 **Mode:** mvp
 **Depends on**: Phase 1, Phase 2
@@ -51,6 +56,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Regression tests pin the audit fixture table (`Béziera`, `Schrödinger`, `Saint-Étienne-la-Geneste`, `café`, `COVID-19`, `biało-czerwony` retention) against `clean_text()` and the shared validator — all pass
   2. `build_summary.json` reports `foreign_fragment_rate`, `digit_token_rate`, and per-genre rates as the acceptance signal
   3. A full-tier rebuild shows zero foreign fragments in docs and counts (not a seed/small build)
+
 **Plans**: TBD
 
 ## Progress
@@ -60,6 +66,6 @@ Phases execute sequentially: 1 → 2 → 3 (parallelization is disabled for this
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Cleaning Stage + Shared Tokenizer | 0/TBD | Not started | - |
+| 1. Cleaning Stage + Shared Tokenizer | 2/2 | Complete    | 2026-10-16 |
 | 2. Source Hardening + Contracts + Handoff | 0/TBD | Not started | - |
 | 3. Verification | 0/TBD | Not started | - |
