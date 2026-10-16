@@ -4,11 +4,14 @@ verified: 2026-10-16T18:01:43Z
 status: passed
 score: 6/6 must-haves verified
 covered_files:
+  - .planning/phases/01-cleaning-stage-shared-tokenizer/01-01-PLAN.md
+  - .planning/phases/01-cleaning-stage-shared-tokenizer/01-01-SUMMARY.md
+  - .planning/phases/01-cleaning-stage-shared-tokenizer/01-02-PLAN.md
+  - .planning/phases/01-cleaning-stage-shared-tokenizer/01-02-SUMMARY.md
   - src/polish_corpus/text_cleaning.py # sha256:7bf4a1bc4ed7c5d01a21323fc39e2c98d9b44230e459053713d3efcc15ac808d
   - src/polish_corpus/corpus_sampler.py # sha256:b03d3504f3e408d3e54d35b9a5f7291277090f82487b26621b08deacb90e028d
   - tests/test_cleaning.py # sha256:7a9cb01f0040fd8d98de7d577588f2806b9f7d671b21e1cc849d7fcf6320fc3a
-  - .planning/phases/01-cleaning-stage-shared-tokenizer/01-REVIEW-DISPOSITION.md # sha256:86aa1cf6a2f5daa961e53c68e366178c2a34f1938ad7010837b9228ea04c653c
-covered_digest: "unavailable: verification.fingerprint verb not implemented in this environment (sdk_unknown_command); per-file sha256 recorded inline above"
+covered_digest: "v3:sha256:f64ec704ff1984fea3459330c5e0aabcf7817cf5f5c04de808822dd11dd36cd4"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
