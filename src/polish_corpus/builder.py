@@ -271,6 +271,7 @@ Representative, balanced corpus for generic Polish language stemming and retriev
                 "tier": tier.name,
                 "elapsed_seconds": round(time.perf_counter() - t0, 2),
                 "summary": corpus_summary,
+                "audit_rates": corpus_summary["audit_rates"],
             },
             indent=2,
             ensure_ascii=False,

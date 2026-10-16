@@ -12,6 +12,8 @@ from __future__ import annotations
 import html
 import re
 import unicodedata
+from typing import NamedTuple
+from typing import NamedTuple
 
 # Tokenization pattern matching valid Polish word tokens.
 # Moved verbatim from corpus_sampler.py; this module is the sole owner.
@@ -43,23 +45,38 @@ def _is_polish_letter(ch: str) -> bool:
     return _POLISH_LETTER_RE.fullmatch(ch) is not None
 
 
-def _drop_token(token: str) -> bool:
-    """Return True if a whitespace-delimited token must vanish whole."""
+class AuditCounts(NamedTuple):
+    """Per-document cleaning audit counters from audit_clean()."""
+
+    foreign_dropped: int
+    digit_dropped: int
+    url_removed: int
+    email_removed: int
+    tokens_kept: int
+
+
+def _drop_cause(token: str) -> str | None:
+    """Return why a whitespace-delimited token must vanish whole, or None to keep."""
     for ch in token:
         # 1. Any digit kills the whole token (2012, COVID-19, model3).
         if ch.isdigit():
-            return True
+            return "digit"
         # 2. Any combining mark kills the whole token: marks without an NFC
         #    precomposition (or introduced post-NFC via entities) must never
         #    leave their base letters behind as salvageable fragments.
         if unicodedata.category(ch).startswith("M"):
-            return True
+            return "foreign"
         # 3. Any non-Polish letter kills the whole token (é in café,
         #    É in Saint-Étienne). Punctuation attached to a Polish word
         #    (commas, quotes) is not a letter and does not trigger a drop.
         if unicodedata.category(ch).startswith("L") and not _is_polish_letter(ch):
-            return True
-    return False
+            return "foreign"
+    return None
+
+
+def _drop_token(token: str) -> bool:
+    """Return True if a whitespace-delimited token must vanish whole."""
+    return _drop_cause(token) is not None
 
 
 def is_valid_token(token: str) -> bool:
@@ -85,10 +102,16 @@ def tokenize(text: str) -> list[str]:
     return [t for t in TOKEN_RE.findall(text) if is_valid_token(t)]
 
 
-def clean_text(text: str) -> str:
-    """Clean raw corpus text, dropping foreign and numeric tokens whole."""
+def audit_clean(text: str) -> tuple[str, AuditCounts]:
+    """Clean raw corpus text, returning cleaned text plus drop counters.
+
+    Single implementation behind clean_text(): same pass classifies each
+    whitespace-delimited token (digit-cause vs foreign-cause per the
+    _drop_cause order); URL/e-mail removals counted via subn; tokens_kept
+    counted on the final cleaned text, consistent with writer TF/DF.
+    """
     if not text:
-        return ""
+        return "", AuditCounts(0, 0, 0, 0, 0)
     # 1. NFC normalize FIRST so NFD combining marks cannot evade the
     #    Polish-class test below.
     cleaned = unicodedata.normalize("NFC", text)
@@ -111,15 +134,25 @@ def clean_text(text: str) -> str:
     # 5. Strip URLs and e-mail addresses AFTER unescape/control-strip
     #    (encoded forms like &#64; decode to @ first) and BEFORE the
     #    token-level DROP, so http/com/user fragments never become countable.
-    cleaned = _URL_RE.sub(" ", cleaned)
-    cleaned = _EMAIL_RE.sub(" ", cleaned)
+    cleaned, url_removed = _URL_RE.subn(" ", cleaned)
+    cleaned, email_removed = _EMAIL_RE.subn(" ", cleaned)
     # 6. Token-level DROP on whitespace-delimited tokens: the whole token
     #    vanishes, no letter-part salvage (Béziera drops entirely, never
     #    B+ziera; café never caf; COVID-19 never COVID). Whitespace
     #    separators are preserved so paragraph breaks survive.
+    foreign_dropped = 0
+    digit_dropped = 0
     kept_parts = []
     for part in re.split(r"(\s+)", cleaned):
-        if not part or part[0].isspace() or not _drop_token(part):
+        if not part or part[0].isspace():
+            kept_parts.append(part)
+            continue
+        cause = _drop_cause(part)
+        if cause == "digit":
+            digit_dropped += 1
+        elif cause == "foreign":
+            foreign_dropped += 1
+        else:
             kept_parts.append(part)
     cleaned = "".join(kept_parts)
     # 7. Quote/dash normalization AFTER the filter (never launder dropped
@@ -130,4 +163,16 @@ def clean_text(text: str) -> str:
     cleaned = re.sub(r"[^\S\n]+", " ", cleaned)
     cleaned = re.sub(r"[ ]*\n[ ]*", "\n", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.strip()
+    cleaned = cleaned.strip()
+    return cleaned, AuditCounts(
+        foreign_dropped=foreign_dropped,
+        digit_dropped=digit_dropped,
+        url_removed=url_removed,
+        email_removed=email_removed,
+        tokens_kept=len(tokenize(cleaned)),
+    )
+
+
+def clean_text(text: str) -> str:
+    """Clean raw corpus text, dropping foreign and numeric tokens whole."""
+    return audit_clean(text)[0]

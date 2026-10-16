@@ -14,7 +14,26 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from .config import GENRE_CONFIG
-from .text_cleaning import clean_text, tokenize
+from .text_cleaning import audit_clean, clean_text, tokenize
+
+
+def _audit_rate_entry(counts: Counter) -> dict[str, int | float | bool]:
+    """Derive input-honest audit rates from raw per-genre/global counters."""
+    foreign_dropped = counts.get("foreign_dropped", 0)
+    digit_dropped = counts.get("digit_dropped", 0)
+    tokens_kept = counts.get("tokens_kept", 0)
+    dropped_total = foreign_dropped + digit_dropped
+    denom = dropped_total + tokens_kept
+    return {
+        "foreign_fragment_rate": (foreign_dropped / denom) if denom else 0.0,
+        "digit_token_rate": (digit_dropped / denom) if denom else 0.0,
+        "dropped_total": dropped_total,
+        "foreign_dropped": foreign_dropped,
+        "digit_dropped": digit_dropped,
+        "tokens_kept": tokens_kept,
+        "url_removed": counts.get("url_removed", 0),
+        "email_removed": counts.get("email_removed", 0),
+    }
 
 
 def count_words(text: str) -> int:
@@ -67,17 +86,24 @@ class BalancedCorpusWriter:
         )
         self.doc_counts: dict[str, int] = {genre: 0 for genre in GENRE_CONFIG}
         self.token_counts: dict[str, int] = {genre: 0 for genre in GENRE_CONFIG}
+        self.audit_counts: dict[str, Counter] = {genre: Counter() for genre in GENRE_CONFIG}
         self.term_freq: Counter[str] = Counter()
         self.doc_freq: Counter[str] = Counter()
 
     def add_document(self, genre: str, text: str) -> str:
         """Add a single natural document to the zip archive under genre directory."""
-        # Single choke-point gate: clean BEFORE both the archive write and
-        # TF/DF counting so stored docs and counts agree by construction.
-        text = clean_text(text)
+        # Single choke-point gate: audit_clean BEFORE both the archive write
+        # and TF/DF counting so stored docs and counts agree by construction.
+        # Audit counters accumulate HERE ONLY (never in chunk_text_stream), so
+        # sizing-path drops cannot double-count into the reported rates.
+        text, counts = audit_clean(text)
+        if genre not in self.audit_counts:
+            self.audit_counts[genre] = Counter()
+        self.audit_counts[genre].update(counts._asdict())
         if not text:
             # Nothing countable survived cleaning: do not consume a doc slot
-            # or write an empty entry into the archive.
+            # or write an empty entry into the archive (drops above are still
+            # recorded so rates stay input-honest).
             return ""
         if genre not in self.doc_counts:
             self.doc_counts[genre] = 0
@@ -141,6 +167,9 @@ class BalancedCorpusWriter:
 
     def summary(self) -> dict[str, any]:
         """Return compilation summary metrics."""
+        global_counts: Counter = Counter()
+        for genre_counts in self.audit_counts.values():
+            global_counts.update(genre_counts)
         return {
             "total_documents": sum(self.doc_counts.values()),
             "total_tokens": sum(self.token_counts.values()),
@@ -148,4 +177,9 @@ class BalancedCorpusWriter:
             "genre_docs": dict(self.doc_counts),
             "genre_tokens": dict(self.token_counts),
             "archive_size_bytes": self.output_zip_path.stat().st_size if self.output_zip_path.exists() else 0,
+            "audit_rates": {
+                "global": _audit_rate_entry(global_counts),
+                "per_genre": {genre: _audit_rate_entry(counts) for genre, counts in self.audit_counts.items()},
+                "paradigm_docs_excluded": True,
+            },
         }
