@@ -64,24 +64,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLN-01 | Phase TBD | Pending |
-| CLN-02 | Phase TBD | Pending |
-| CLN-03 | Phase TBD | Pending |
-| TOK-01 | Phase TBD | Pending |
-| TOK-02 | Phase TBD | Pending |
-| TOK-03 | Phase TBD | Pending |
-| SRC-01 | Phase TBD | Pending |
-| SRC-02 | Phase TBD | Pending |
-| SRC-03 | Phase TBD | Pending |
-| VER-01 | Phase TBD | Pending |
-| VER-02 | Phase TBD | Pending |
-| VER-03 | Phase TBD | Pending |
-| DOC-01 | Phase TBD | Pending |
+| CLN-01 | Phase 1 | Pending |
+| CLN-02 | Phase 1 | Pending |
+| CLN-03 | Phase 1 | Pending |
+| TOK-01 | Phase 1 | Pending |
+| TOK-02 | Phase 1 | Pending |
+| TOK-03 | Phase 2 | Pending |
+| SRC-01 | Phase 2 | Pending |
+| SRC-02 | Phase 2 | Pending |
+| SRC-03 | Phase 2 | Pending |
+| VER-01 | Phase 3 | Pending |
+| VER-02 | Phase 3 | Pending |
+| VER-03 | Phase 3 | Pending |
+| DOC-01 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-16*
