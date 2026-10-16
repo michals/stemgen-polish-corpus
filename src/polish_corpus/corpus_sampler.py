@@ -75,6 +75,10 @@ class BalancedCorpusWriter:
         # Single choke-point gate: clean BEFORE both the archive write and
         # TF/DF counting so stored docs and counts agree by construction.
         text = clean_text(text)
+        if not text:
+            # Nothing countable survived cleaning: do not consume a doc slot
+            # or write an empty entry into the archive.
+            return ""
         if genre not in self.doc_counts:
             self.doc_counts[genre] = 0
             self.token_counts[genre] = 0
@@ -103,7 +107,10 @@ class BalancedCorpusWriter:
         """Add up to max_docs documents for a specific genre."""
         count = 0
         for doc in docs:
-            self.add_document(genre, doc)
+            # Empty-after-clean docs return "" and do not consume quota:
+            # keep pulling until max_docs real docs or source exhaustion.
+            if not self.add_document(genre, doc):
+                continue
             count += 1
             if count >= max_docs:
                 break

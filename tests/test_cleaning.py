@@ -217,18 +217,33 @@ def test_chunker_skips_foreign_only_paragraph() -> None:
     assert docs == ["Ala ma kota i psa"]
 
 
-def test_empty_after_clean_flows_through(tmp_path) -> None:
-    """Verify text that cleans to empty never breaks the pipeline."""
+def test_empty_after_clean_skips_write_and_quota(tmp_path) -> None:
+    """Verify text that cleans to empty writes nothing and consumes no quota."""
     assert clean_text("COVID-19 2012 Béziera") == ""
     # Zero-count paragraphs take the existing chunk_text_stream skip-empty path.
     docs = list(chunk_text_stream(iter(["2012 !!!", "Ala ma kota i psa"]), target_words=5, min_words=1))
     assert docs == ["Ala ma kota i psa"]
-    # A doc that cleans to empty still flows through the writer gate cleanly.
+    # A doc that cleans to empty returns the "" sentinel: no file, no counts.
     writer = BalancedCorpusWriter(tmp_path / "corpus.zip")
-    writer.add_document("04_wikipedia", "COVID-19 2012 Béziera")
-    writer.close()
+    assert writer.add_document("04_wikipedia", "COVID-19 2012 Béziera") == ""
     assert dict(writer.term_freq) == {}
     assert dict(writer.doc_freq) == {}
+    assert writer.doc_counts["04_wikipedia"] == 0
+    # Quota flows to real docs: empties are skipped, numbering has no gaps.
+    added = writer.add_documents_for_genre(
+        "04_wikipedia",
+        iter(["COVID-19 2012", "Ala ma kota i psa", "Béziera", "Kot pije mleko codzień"]),
+        2,
+    )
+    assert added == 2
+    writer.close()
     with zipfile.ZipFile(tmp_path / "corpus.zip") as archive:
-        stored = archive.read("04_wikipedia/doc_00001.txt").decode("utf-8")
-    assert stored == ""
+        assert sorted(archive.namelist()) == [
+            "04_wikipedia/doc_00001.txt",
+            "04_wikipedia/doc_00002.txt",
+        ]
+        assert archive.read("04_wikipedia/doc_00001.txt").decode("utf-8") == "Ala ma kota i psa"
+    # Source exhaustion with only empty docs yields zero real docs.
+    writer2 = BalancedCorpusWriter(tmp_path / "corpus2.zip")
+    assert writer2.add_documents_for_genre("04_wikipedia", iter(["2012", "Béziera"]), 3) == 0
+    writer2.close()
