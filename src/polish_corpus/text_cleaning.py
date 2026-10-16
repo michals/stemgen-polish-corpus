@@ -15,7 +15,7 @@ import unicodedata
 
 # Tokenization pattern matching valid Polish word tokens.
 # Moved verbatim from corpus_sampler.py; this module is the sole owner.
-TOKEN_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(?:-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)?")
+TOKEN_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(?:-[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+)*")
 
 # Single Polish-alphabet letter (ASCII + Polish diacritics).
 _POLISH_LETTER_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")

@@ -33,6 +33,12 @@ def test_hyphenated_polish_compound_retained() -> None:
     assert tokenize("flaga biało-czerwony powiewa") == ["flaga", "biało-czerwony", "powiewa"]
 
 
+def test_multi_hyphen_compound_retained_whole() -> None:
+    """Verify triple compounds tokenize whole, agreeing with is_valid_token."""
+    assert is_valid_token("biało-czerwono-zielony")
+    assert tokenize("x biało-czerwono-zielony y") == ["x", "biało-czerwono-zielony", "y"]
+
+
 def test_stored_text_and_counts_agree(tmp_path) -> None:
     """Verify re-tokenizing stored zip text reproduces recorded TF/DF."""
     writer = BalancedCorpusWriter(tmp_path / "corpus.zip")
