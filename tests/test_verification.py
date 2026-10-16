@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
+import sys
+import zipfile
+from pathlib import Path
+
 import pytest
 
 from polish_corpus.corpus_sampler import BalancedCorpusWriter, chunk_text_stream
@@ -121,7 +127,9 @@ def test_clean_text_delegates_to_audit_clean(dirty: str) -> None:
     ("dirty", "expected", "forbidden"),
     [
         pytest.param("Béziera", ["słowo", "inne"], ("B", "ziera", "Béziera"), id="audit-Beziera"),
-        pytest.param("Besançon", ["słowo", "inne"], ("Besan", "on", "Besançon"), id="audit-Besancon"),
+        pytest.param(
+            "Besançon", ["słowo", "inne"], ("Besan", "on", "Besançon"), id="audit-Besancon"
+        ),
         pytest.param(
             "Turčianske", ["słowo", "inne"], ("Tur", "ianske", "Turčianske"), id="audit-Turcianske"
         ),
@@ -133,10 +141,15 @@ def test_clean_text_delegates_to_audit_clean(dirty: str) -> None:
         ),
         pytest.param("Corrèze", ["słowo", "inne"], ("Corr", "ze", "Corrèze"), id="audit-Correze"),
         pytest.param(
-            "Schrödinger", ["słowo", "inne"], ("Schr", "dinger", "Schrödinger"), id="audit-Schrodinger"
+            "Schrödinger",
+            ["słowo", "inne"],
+            ("Schr", "dinger", "Schrödinger"),
+            id="audit-Schrodinger",
         ),
         pytest.param("Hübner", ["słowo", "inne"], ("H", "bner", "Hübner"), id="audit-Hubner"),
-        pytest.param("Maréchal", ["słowo", "inne"], ("Mar", "chal", "Maréchal"), id="audit-Marechal"),
+        pytest.param(
+            "Maréchal", ["słowo", "inne"], ("Mar", "chal", "Maréchal"), id="audit-Marechal"
+        ),
         pytest.param(
             "désintéressement",
             ["słowo", "inne"],
@@ -166,7 +179,9 @@ def test_clean_text_delegates_to_audit_clean(dirty: str) -> None:
         pytest.param("Anthé", ["słowo", "inne"], ("Anth", "Anthé"), id="audit-variant-Anthe"),
     ],
 )
-def test_audit_row_leaves_no_salvage(dirty: str, expected: list[str], forbidden: tuple[str, ...]) -> None:
+def test_audit_row_leaves_no_salvage(
+    dirty: str, expected: list[str], forbidden: tuple[str, ...]
+) -> None:
     """Verify each audit §2 row drops whole with none of its historic fragments generated."""
     cleaned = clean_text(f"słowo {dirty} inne")
     leftovers = tokenize(cleaned)
@@ -179,3 +194,83 @@ def test_audit_row_leaves_no_salvage(dirty: str, expected: list[str], forbidden:
         # substring matching would be noise — exact-token absence pins those.)
         if len(fragment) >= 3:
             assert fragment not in cleaned
+
+
+def _load_gate_script():
+    """Import scripts/verify_zero_fragments.py without argparse side effects."""
+    path = Path(__file__).resolve().parent.parent / "scripts" / "verify_zero_fragments.py"
+    spec = importlib.util.spec_from_file_location("verify_zero_fragments", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["verify_zero_fragments"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_synthetic_dist_dir(dist_dir: Path, *, dirty: bool) -> None:
+    """Build a minimal dist dir: raw zip + matching GT parquet + summary rates."""
+    genre = "04_wikipedia"
+    doc_text = "Ala ma kota" if not dirty else "Ala ma kota Béziera"
+    with zipfile.ZipFile(dist_dir / "corpus.zip", mode="w") as archive:
+        archive.writestr(f"{genre}/doc_00001.txt", doc_text)
+    words = [t.lower() for t in tokenize(doc_text)]
+    gt_words = words if not dirty else [*words, "béziera"]
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    table = pa.Table.from_arrays(
+        [
+            pa.array(gt_words, type=pa.string()),
+            pa.array([f"lemma{i}" for i in range(len(gt_words))], type=pa.string()),
+            pa.array([1] * len(gt_words), type=pa.int64()),
+            pa.array([1] * len(gt_words), type=pa.int64()),
+        ],
+        names=["word", "lemma", "tf", "df"],
+    )
+    pq.write_table(table, dist_dir / "ground_truth.parquet", compression="zstd")
+    kept = len(tokenize("Ala ma kota"))
+    (dist_dir / "build_summary.json").write_text(
+        json.dumps(
+            {
+                "tier": "synthetic",
+                "summary": {},
+                "audit_rates": {
+                    "global": {
+                        "foreign_fragment_rate": 0.0,
+                        "digit_token_rate": 0.0,
+                        "dropped_total": 0,
+                        "foreign_dropped": 0,
+                        "digit_dropped": 0,
+                        "tokens_kept": kept,
+                        "url_removed": 0,
+                        "email_removed": 0,
+                    },
+                    "per_genre": {},
+                    "paradigm_docs_excluded": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_gate_flags_synthetic_dirty_corpus(tmp_path) -> None:
+    """Verify the gate fails (nonzero exit) on a dirty synthetic build."""
+    gate = _load_gate_script()
+    _write_synthetic_dist_dir(tmp_path, dirty=True)
+    report = gate.check_dist_dir(tmp_path)
+    assert not report.passed
+    assert report.doc_violations > 0
+    assert gate.main(["--dist-dir", str(tmp_path)]) == 1
+
+
+def test_gate_passes_synthetic_clean_corpus(tmp_path) -> None:
+    """Verify the gate passes (zero exit) on a clean synthetic build."""
+    gate = _load_gate_script()
+    _write_synthetic_dist_dir(tmp_path, dirty=False)
+    report = gate.check_dist_dir(tmp_path)
+    assert report.passed
+    assert report.cross_checks["stored_counts_agree"]
+    assert report.cross_checks["tokens_kept_agree"]
+    assert report.cross_checks["rate_arithmetic_ok"]
+    assert gate.main(["--dist-dir", str(tmp_path)]) == 0

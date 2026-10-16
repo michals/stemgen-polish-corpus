@@ -1,0 +1,265 @@
+"""Independent zero-foreign-fragment gate for built corpus tiers.
+
+Re-tokenizes every stored ``corpus.zip`` doc and the ``ground_truth.parquet``
+word column with the shared :func:`tokenize` / :func:`is_valid_token`
+contract, then cross-checks the script-measured evidence against the
+writer-reported ``audit_rates`` in ``build_summary.json``.
+
+The script never reads writer memory — every number it checks is derived
+from stored bytes — so a passing gate means the artifacts themselves are
+clean, not that the writer agrees with itself (no self-grading).
+
+Cross-checks (any mismatch fails the gate):
+  X1 stored/counts agreement — the per-word TF multiset re-tokenized from
+     stored docs (all genres, paradigms included) equals the GT word->tf map.
+  X2 tokens_kept agreement — script-measured non-paradigm stored tokens equal
+     the writer-reported global ``tokens_kept``.
+  X3 rate arithmetic — writer-reported rates recompute from reported counts.
+  X4 zero fragments — no foreign/digit/control residue in docs or GT words.
+
+Exit 0 iff all cross-checks pass; nonzero otherwise. ``[Verify]`` print tags.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+import unicodedata
+import zipfile
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from polish_corpus.text_cleaning import TOKEN_RE, is_valid_token, tokenize
+
+# Polish alphabet class, mirrored from text_cleaning for gate independence:
+# the gate must not share the private regex, only the public contract above.
+_POLISH_LETTER_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
+
+PARADIGM_GENRE = "99_morfeusz_paradigms"
+
+
+def scan_text(text: str) -> list[str]:
+    """Return violation descriptions for foreign/digit residue in stored text."""
+    violations: list[str] = []
+    for hit in TOKEN_RE.findall(text):
+        if not is_valid_token(hit):
+            violations.append(f"invalid-token {hit!r}")
+    for ch in text:
+        if ch in ("\n", "\t"):
+            continue
+        if ch == "�" or unicodedata.category(ch).startswith("C"):
+            violations.append(f"stripped-char U+{ord(ch):04X}")
+        elif ch.isdigit():
+            violations.append(f"digit-char {ch!r}")
+        elif unicodedata.category(ch).startswith("L") and _POLISH_LETTER_RE.fullmatch(ch) is None:
+            violations.append(f"foreign-char {ch!r} (U+{ord(ch):04X})")
+    return violations
+
+
+@dataclass
+class GenreScan:
+    """Per-genre scan outcome for one zip subdirectory."""
+
+    genre: str
+    docs: int = 0
+    tokens: int = 0
+    violations: list[str] = field(default_factory=list)
+
+
+@dataclass
+class GroundTruthScan:
+    """Outcome of the GT word-column scan."""
+
+    words: int = 0
+    invalid_words: list[str] = field(default_factory=list)
+    tf_total: int = 0
+
+
+@dataclass
+class GateReport:
+    """Full gate outcome across zip docs, GT parquet, and summary cross-check."""
+
+    genres: dict[str, GenreScan] = field(default_factory=dict)
+    gt: GroundTruthScan = field(default_factory=GroundTruthScan)
+    writer_rates: dict = field(default_factory=dict)
+    cross_checks: dict[str, bool] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def doc_violations(self) -> int:
+        """Return total stored-doc violation count across genres."""
+        return sum(len(scan.violations) for scan in self.genres.values())
+
+    @property
+    def passed(self) -> bool:
+        """Return True iff zero fragments and every cross-check agrees."""
+        return (
+            not self.errors
+            and not self.gt.invalid_words
+            and self.doc_violations == 0
+            and all(self.cross_checks.values())
+            and bool(self.cross_checks)
+        )
+
+
+def scan_corpus_zip(zip_path: Path) -> tuple[dict[str, GenreScan], dict[str, int]]:
+    """Re-tokenize every stored doc; return per-genre scans plus TF multiset."""
+    genres: dict[str, GenreScan] = {}
+    tf: dict[str, int] = {}
+    with zipfile.ZipFile(zip_path) as archive:
+        for name in archive.namelist():
+            if name.endswith("/"):
+                continue
+            genre = name.split("/", 1)[0] if "/" in name else "(root)"
+            scan = genres.setdefault(genre, GenreScan(genre))
+            try:
+                text = archive.read(name).decode("utf-8")
+            except UnicodeDecodeError:
+                scan.violations.append(f"undecodable-bytes {name}")
+                continue
+            scan.docs += 1
+            tokens = [t.lower() for t in tokenize(text)]
+            scan.tokens += len(tokens)
+            for token in tokens:
+                tf[token] = tf.get(token, 0) + 1
+            for violation in scan_text(text):
+                scan.violations.append(f"{name}: {violation}")
+    return genres, tf
+
+
+def scan_ground_truth(parquet_path: Path) -> tuple[GroundTruthScan, dict[str, int]]:
+    """Scan the GT word column; return scan outcome plus word->tf map."""
+    import pyarrow.parquet as pq
+
+    scan = GroundTruthScan()
+    gt_tf: dict[str, int] = {}
+    table = pq.read_table(parquet_path, columns=["word", "tf"])
+    words = table.column("word").to_pylist()
+    tfs = table.column("tf").to_pylist()
+    for word, tf_value in zip(words, tfs, strict=True):
+        scan.words += 1
+        scan.tf_total += int(tf_value)
+        gt_tf[str(word)] = int(tf_value)
+        if not is_valid_token(str(word)):
+            scan.invalid_words.append(str(word))
+    return scan, gt_tf
+
+
+def _rates_recompute_ok(entry: dict) -> bool:
+    """Return True iff a writer rate entry recomputes from its own counts."""
+    import math
+
+    foreign = entry.get("foreign_dropped", 0)
+    digit = entry.get("digit_dropped", 0)
+    kept = entry.get("tokens_kept", 0)
+    if entry.get("dropped_total", 0) != foreign + digit:
+        return False
+    denom = foreign + digit + kept
+    expected_foreign = (foreign / denom) if denom else 0.0
+    expected_digit = (digit / denom) if denom else 0.0
+    return math.isclose(
+        entry.get("foreign_fragment_rate", -1.0), expected_foreign, rel_tol=1e-9, abs_tol=1e-12
+    ) and math.isclose(
+        entry.get("digit_token_rate", -1.0), expected_digit, rel_tol=1e-9, abs_tol=1e-12
+    )
+
+
+def check_dist_dir(dist_dir: Path) -> GateReport:
+    """Run the full gate against stored build artifacts in ``dist_dir``."""
+    report = GateReport()
+    dist_dir = Path(dist_dir)
+    zip_path = dist_dir / "corpus.zip"
+    parquet_path = dist_dir / "ground_truth.parquet"
+    summary_path = dist_dir / "build_summary.json"
+    for path in (zip_path, parquet_path, summary_path):
+        if not path.exists():
+            report.errors.append(f"missing artifact {path}")
+    if report.errors:
+        return report
+
+    report.genres, stored_tf = scan_corpus_zip(zip_path)
+    report.gt, gt_tf = scan_ground_truth(parquet_path)
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
+        report.errors.append(f"unreadable build_summary.json: {err}")
+        return report
+    rates = summary.get("audit_rates") or summary.get("summary", {}).get("audit_rates") or {}
+    report.writer_rates = rates
+
+    # X1: stored/counts agreement — re-tokenized TF equals GT word->tf exactly.
+    report.cross_checks["stored_counts_agree"] = stored_tf == gt_tf
+    # X2: script-measured non-paradigm stored tokens equal writer tokens_kept.
+    stored_kept = sum(
+        scan.tokens for genre, scan in report.genres.items() if genre != PARADIGM_GENRE
+    )
+    global_entry = rates.get("global", {}) if isinstance(rates, dict) else {}
+    report.cross_checks["tokens_kept_agree"] = isinstance(
+        global_entry, dict
+    ) and stored_kept == global_entry.get("tokens_kept", -1)
+    # X3: writer rate arithmetic recomputes from writer counts.
+    entries = [global_entry] if isinstance(global_entry, dict) else []
+    per_genre = rates.get("per_genre", {}) if isinstance(rates, dict) else {}
+    if isinstance(per_genre, dict):
+        entries.extend(e for e in per_genre.values() if isinstance(e, dict))
+    report.cross_checks["rate_arithmetic_ok"] = bool(entries) and all(
+        _rates_recompute_ok(e) for e in entries
+    )
+    # X4: zero fragments in stored docs and GT words.
+    report.cross_checks["zero_fragments"] = (
+        report.doc_violations == 0 and not report.gt.invalid_words
+    )
+    return report
+
+
+def print_report(report: GateReport) -> None:
+    """Print per-genre fragment counts, measured rates, and cross-checks."""
+    for genre in sorted(report.genres):
+        scan = report.genres[genre]
+        rate = (len(scan.violations) / scan.tokens) if scan.tokens else 0.0
+        print(
+            f"[Verify] genre {genre}: docs={scan.docs} tokens={scan.tokens} "
+            f"fragments={len(scan.violations)} rate={rate:.6f}"
+        )
+        for violation in scan.violations[:10]:
+            print(f"[Verify]   violation: {violation}")
+    print(
+        f"[Verify] ground_truth: words={report.gt.words} "
+        f"invalid={len(report.gt.invalid_words)} tf_total={report.gt.tf_total}"
+    )
+    for word in report.gt.invalid_words[:10]:
+        print(f"[Verify]   invalid GT word: {word!r}")
+    global_entry = (
+        report.writer_rates.get("global", {}) if isinstance(report.writer_rates, dict) else {}
+    )
+    if isinstance(global_entry, dict) and global_entry:
+        print(
+            f"[Verify] writer audit_rates global: foreign={global_entry.get('foreign_fragment_rate')} "
+            f"digit={global_entry.get('digit_token_rate')} "
+            f"dropped={global_entry.get('dropped_total')} kept={global_entry.get('tokens_kept')}"
+        )
+    for name, ok in report.cross_checks.items():
+        print(f"[Verify] cross-check {name}: {'OK' if ok else 'MISMATCH'}")
+    for error in report.errors:
+        print(f"[Verify] error: {error}")
+    print(f"[Verify] gate: {'PASS' if report.passed else 'FAIL'}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry: run the gate against ``--dist-dir`` (default dist/compact)."""
+    parser = argparse.ArgumentParser(description="Zero-foreign-fragment gate for built tiers.")
+    parser.add_argument(
+        "--dist-dir",
+        default="dist/compact",
+        help="Build output dir holding corpus.zip + parquet + summary",
+    )
+    args = parser.parse_args(argv)
+    report = check_dist_dir(Path(args.dist_dir))
+    print_report(report)
+    return 0 if report.passed else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
