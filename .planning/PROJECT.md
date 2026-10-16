@@ -51,12 +51,26 @@ fragments training the stemmer toward garbage stems.
   issues, remediation Phases A–D. This project implements A–D.
 - Key evidence: `TOKEN_RE` splits `Béziera→B+ziera`, `Schrödinger→Schr+dinger`,
   `café→caf`; fragments become `(word, word)` GT rows via `builder.py` OOV fallback.
+- Consumer contract (see `stemgen-project-readme-for-context.md`): `stemgen build --corpus <corpus.zip>`
+  consumes our `corpus.zip` doc text directly and extracts its **own** ground truth via teacher
+  models (Stanza/spaCy/Morfeusz/LLMs) with Level-1 run cache + Level-2 SQLite doc-hash
+  (`SHA-256`) `TeacherCache`. So the **doc text is the load-bearing interface** — dirty docs
+  get teacher-lemmatized into garbage `(word, lemma)` pairs that pollute the suffix trie and
+  inflate the micro-stemmer bundle. Our Morfeusz `ground_truth.parquet` serves IR/BM25
+  benchmarking and our own train/test splits (still worth hygiene), but the stemmer-noise
+  path runs through doc text.
+- Consumer rebuild cost: cleaned docs change `SHA-256` hashes → stemgen Level-2 cache misses
+  on first rebuild (one-time neural re-inference); not a blocker, but expect it downstream.
+- Stemgen evaluates BCubed P/R/F₁ vs. the Snowball Polish baseline — our zero-fragment gate
+  and audit rates align with that (cleaner vocab → smaller trie, better precision).
 - `output/general/` in tree is a 21-doc seed-dominated test build, not a full tier build —
   re-verify stats after a full build.
 
 ## Constraints
 
-- **Compatibility**: ground-truth parquet schema (`word, lemma, tf, df`) stays compatible unless explicitly versioned — stemgen consumes it
+- **Compatibility**: `corpus.zip` layout (`{genre}/doc_*.txt` hierarchy) must stay consumable by
+  `stemgen build --corpus`; ground-truth parquet schema (`word, lemma, tf, df`) stays compatible
+  unless explicitly versioned — benchmark/split consumers rely on it
 - **Correctness**: stored doc text and TF/DF counts must agree (clean before both write and count)
 - **Performance**: cleaning must stream (no full-corpus in-memory); full-tier builds stay practical
 - **Scope**: Phases A–D only (cleaning, tokenizer, GT hygiene, source hardening)
@@ -89,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-16 after initialization*
+*Last updated: 2026-10-16 after consumer-context amendment (stemgen README)*
