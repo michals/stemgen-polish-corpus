@@ -20,6 +20,11 @@ TOKEN_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+(?:-[a-zA-Z
 # Single Polish-alphabet letter (ASCII + Polish diacritics).
 _POLISH_LETTER_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
 
+# URL/e-mail strip patterns applied inside clean_text() AFTER unescape and
+# BEFORE the token-level DROP, so stripped addresses never reach the counters.
+_URL_RE = re.compile(r"https?://\S+|www\.\S+")
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.?[\w.]+")
+
 # Quote/dash normalization applied AFTER the foreign-token filter so that
 # dropped tokens are never laundered back into countable text.
 _QUOTE_REPLACEMENTS = (
@@ -103,7 +108,12 @@ def clean_text(text: str) -> str:
         if ch in ("\n", "\t")
         or (ch != "\ufffd" and not unicodedata.category(ch).startswith("C"))
     )
-    # 5. Token-level DROP on whitespace-delimited tokens: the whole token
+    # 5. Strip URLs and e-mail addresses AFTER unescape/control-strip
+    #    (encoded forms like &#64; decode to @ first) and BEFORE the
+    #    token-level DROP, so http/com/user fragments never become countable.
+    cleaned = _URL_RE.sub(" ", cleaned)
+    cleaned = _EMAIL_RE.sub(" ", cleaned)
+    # 6. Token-level DROP on whitespace-delimited tokens: the whole token
     #    vanishes, no letter-part salvage (Béziera drops entirely, never
     #    B+ziera; café never caf; COVID-19 never COVID). Whitespace
     #    separators are preserved so paragraph breaks survive.
@@ -112,11 +122,11 @@ def clean_text(text: str) -> str:
         if not part or part[0].isspace() or not _drop_token(part):
             kept_parts.append(part)
     cleaned = "".join(kept_parts)
-    # 6. Quote/dash normalization AFTER the filter (never launder dropped
+    # 7. Quote/dash normalization AFTER the filter (never launder dropped
     #    tokens back into countable text).
     for old, new in _QUOTE_REPLACEMENTS:
         cleaned = cleaned.replace(old, new)
-    # 7. Collapse whitespace, preserving paragraph breaks.
+    # 8. Collapse whitespace, preserving paragraph breaks.
     cleaned = re.sub(r"[^\S\n]+", " ", cleaned)
     cleaned = re.sub(r"[ ]*\n[ ]*", "\n", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)

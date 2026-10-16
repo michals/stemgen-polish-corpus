@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import hashlib
 import json
 import re
 from collections.abc import Iterator
@@ -53,10 +54,15 @@ def iter_spoken_forum_docs(max_docs: int) -> Iterator[str]:
         yield from _stream_nkjp_sentences(dev_path, spoken_prefixes)
 
     count = 0
+    seen: set[str] = set()
     while count < max_docs:
         doc_iter = chunk_text_stream(_sentences(), target_words=500, min_words=200)
         yielded_in_pass = 0
         for doc in doc_iter:
+            digest = hashlib.blake2b(doc.encode("utf-8"), digest_size=16).hexdigest()
+            if digest in seen:
+                continue
+            seen.add(digest)
             yield doc
             count += 1
             yielded_in_pass += 1
@@ -87,10 +93,15 @@ def iter_literature_docs(max_docs: int) -> Iterator[str]:
         yield from _stream_nkjp_sentences(train_path, ("2",))
 
     count = 0
+    seen: set[str] = set()
     while count < max_docs:
         doc_iter = chunk_text_stream(_paragraphs(), target_words=500, min_words=250)
         yielded_in_pass = 0
         for doc in doc_iter:
+            digest = hashlib.blake2b(doc.encode("utf-8"), digest_size=16).hexdigest()
+            if digest in seen:
+                continue
+            seen.add(digest)
             yield doc
             count += 1
             yielded_in_pass += 1
@@ -119,10 +130,15 @@ def iter_news_docs(max_docs: int) -> Iterator[str]:
         yield from _stream_nkjp_sentences(train_path, ("1",))
 
     count = 0
+    seen: set[str] = set()
     while count < max_docs:
         doc_iter = chunk_text_stream(_articles(), target_words=500, min_words=200)
         yielded_in_pass = 0
         for doc in doc_iter:
+            digest = hashlib.blake2b(doc.encode("utf-8"), digest_size=16).hexdigest()
+            if digest in seen:
+                continue
+            seen.add(digest)
             yield doc
             count += 1
             yielded_in_pass += 1
@@ -151,10 +167,15 @@ def iter_wikipedia_docs(max_docs: int) -> Iterator[str]:
                         yield sentence
 
     count = 0
+    seen: set[str] = set()
     while count < max_docs:
         doc_iter = chunk_text_stream(_sentences(), target_words=500, min_words=200)
         yielded_in_pass = 0
         for doc in doc_iter:
+            digest = hashlib.blake2b(doc.encode("utf-8"), digest_size=16).hexdigest()
+            if digest in seen:
+                continue
+            seen.add(digest)
             yield doc
             count += 1
             yielded_in_pass += 1
