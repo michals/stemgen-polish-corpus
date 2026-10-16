@@ -32,7 +32,10 @@ def chunk_text_stream(
     current_word_count = 0
 
     for para in paragraphs:
-        para_clean = para.strip()
+        # 1. Clean BEFORE counting so sizing, skip-empty, stored text, and
+        #    TF/DF all derive from the same cleaned text (clean_text is
+        #    idempotent, so the writer gate re-clean is safe).
+        para_clean = clean_text(para.strip())
         if not para_clean:
             continue
         para_words = count_words(para_clean)

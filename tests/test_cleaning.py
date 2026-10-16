@@ -209,6 +209,14 @@ def test_hyphen_per_segment_validation() -> None:
     assert tokenize(cleaned) == ["w", "mieście"]
 
 
+def test_chunker_skips_foreign_only_paragraph() -> None:
+    """Verify paragraphs with no countable Polish tokens never form docs."""
+    docs = list(
+        chunk_text_stream(iter(["Béziera café", "Ala ma kota i psa"]), target_words=5, min_words=1)
+    )
+    assert docs == ["Ala ma kota i psa"]
+
+
 def test_empty_after_clean_flows_through(tmp_path) -> None:
     """Verify text that cleans to empty never breaks the pipeline."""
     assert clean_text("COVID-19 2012 Béziera") == ""
