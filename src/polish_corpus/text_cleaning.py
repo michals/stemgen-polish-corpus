@@ -13,7 +13,6 @@ import html
 import re
 import unicodedata
 from typing import NamedTuple
-from typing import NamedTuple
 
 # Tokenization pattern matching valid Polish word tokens.
 # Moved verbatim from corpus_sampler.py; this module is the sole owner.
