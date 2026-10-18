@@ -43,12 +43,13 @@ def complete_paradigms(
         print(f"[ParadigmGenerator] Selected {len(selected_lemmas):,} top lemmas. Checking missing inflections...")
 
     missing_forms: list[str] = []
-    current_vocab = writer.term_freq
+    seen_missing: set[str] = set(writer.term_freq.keys())
 
     for lemma in selected_lemmas:
         all_forms = morfeusz.get_paradigm(lemma)
-        for form in all_forms:
-            if form not in current_vocab:
+        for form in sorted(all_forms):
+            if form not in seen_missing:
+                seen_missing.add(form)
                 missing_forms.append(form)
 
     if verbose:
