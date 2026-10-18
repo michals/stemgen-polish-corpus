@@ -25,6 +25,7 @@ _POLISH_LETTER_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
 # BEFORE the token-level DROP, so stripped addresses never reach the counters.
 _URL_RE = re.compile(r"https?://\S+|www\.\S+")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.?[\w.]+")
+_TRAILING_PUNCT_RE = re.compile(r"([.,;:?!]+)$")
 
 # Quote/dash normalization applied AFTER the foreign-token filter so that
 # dropped tokens are never laundered back into countable text.
@@ -149,8 +150,14 @@ def audit_clean(text: str) -> tuple[str, AuditCounts]:
         cause = _drop_cause(part)
         if cause == "digit":
             digit_dropped += 1
+            m_punct = _TRAILING_PUNCT_RE.search(part)
+            if m_punct:
+                kept_parts.append(m_punct.group(1))
         elif cause == "foreign":
             foreign_dropped += 1
+            m_punct = _TRAILING_PUNCT_RE.search(part)
+            if m_punct:
+                kept_parts.append(m_punct.group(1))
         else:
             kept_parts.append(part)
     cleaned = "".join(kept_parts)
@@ -158,7 +165,9 @@ def audit_clean(text: str) -> tuple[str, AuditCounts]:
     #    tokens back into countable text).
     for old, new in _QUOTE_REPLACEMENTS:
         cleaned = cleaned.replace(old, new)
-    # 8. Collapse whitespace, preserving paragraph breaks.
+    # 8. Collapse whitespace, preserving paragraph breaks and attaching
+    #    preserved sentence punctuation to preceding words.
+    cleaned = re.sub(r"[^\S\n]+([.,;:?!])", r"\1", cleaned)
     cleaned = re.sub(r"[^\S\n]+", " ", cleaned)
     cleaned = re.sub(r"[ ]*\n[ ]*", "\n", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)

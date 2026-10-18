@@ -27,13 +27,16 @@ Exit 0 iff all cross-checks pass; nonzero otherwise. ``[Verify]`` print tags.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
 import unicodedata
 import zipfile
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from polish_corpus.text_cleaning import TOKEN_RE, is_valid_token, tokenize
 
@@ -42,6 +45,43 @@ from polish_corpus.text_cleaning import TOKEN_RE, is_valid_token, tokenize
 _POLISH_LETTER_RE = re.compile(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
 
 PARADIGM_GENRE = "99_morfeusz_paradigms"
+
+# Core Polish function words (at least 14 of the top-20 highest-TF words must be from this set)
+_CORE_POLISH_FUNCTION_WORDS = {
+    "w", "i", "na", "z", "do", "nie", "się", "to", "o", "jak", "że", "po",
+    "od", "przez", "dla", "za", "który", "których", "które", "która", "tym",
+    "tego", "ten", "tej", "te", "jest", "był", "była", "było", "są", "być",
+    "oraz", "ale", "czy", "już", "tylko", "tak", "jego", "jej", "ich", "przy",
+    "jako", "przed", "pod", "nad", "bez", "ze", "we", "co", "gdy", "lub",
+}
+
+CANARY_LEMMA_PROBES: dict[str, set[str]] = {
+    # Homonyms that previously resolved to 'mama', 'maja', or self-lemmas:
+    "mam": {"mieć"},
+    "mają": {"mieć"},
+    "miał": {"mieć"},
+    "jest": {"być"},
+    "są": {"być"},
+    "będzie": {"być"},
+    # Superlatives that previously missed PoliMorf and mapped to themselves:
+    "najstarszy": {"stary"},
+    "najstarszych": {"stary"},
+    "najważniejsze": {"ważny"},
+    "największe": {"duży", "wielki"},
+    "najlepszy": {"dobry"},
+    # Verbal nouns & participles that previously split from their parent verb:
+    "badania": {"badać"},
+    "zadania": {"zadać", "zadanie"},
+    "związane": {"związać"},
+    "wpisane": {"wpisać"},
+    "wystarczający": {"wystarczać"},
+    # Suppletive nouns:
+    "ludzie": {"człowiek"},
+    "ludzi": {"człowiek"},
+    "lata": {"rok"},
+    "latach": {"rok"},
+    "dnia": {"dzień"},
+}
 
 
 def scan_text(text: str) -> list[str]:
@@ -69,6 +109,8 @@ class GenreScan:
     genre: str
     docs: int = 0
     tokens: int = 0
+    unique_doc_hashes: set[str] = field(default_factory=set)
+    sentence_terminators: int = 0
     violations: list[str] = field(default_factory=list)
 
 
@@ -89,6 +131,7 @@ class GateReport:
     gt: GroundTruthScan = field(default_factory=GroundTruthScan)
     writer_rates: dict = field(default_factory=dict)
     cross_checks: dict[str, bool] = field(default_factory=dict)
+    telemetry: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -124,6 +167,10 @@ def scan_corpus_zip(zip_path: Path) -> tuple[dict[str, GenreScan], dict[str, int
                 scan.violations.append(f"undecodable-bytes {name}")
                 continue
             scan.docs += 1
+            if genre != PARADIGM_GENRE:
+                h = hashlib.blake2b(text.encode("utf-8"), digest_size=16).hexdigest()
+                scan.unique_doc_hashes.add(h)
+                scan.sentence_terminators += sum(text.count(p) for p in (".", "!", "?"))
             tokens = [t.lower() for t in tokenize(text)]
             scan.tokens += len(tokens)
             for token in tokens:
@@ -133,22 +180,29 @@ def scan_corpus_zip(zip_path: Path) -> tuple[dict[str, GenreScan], dict[str, int
     return genres, tf
 
 
-def scan_ground_truth(parquet_path: Path) -> tuple[GroundTruthScan, dict[str, int]]:
-    """Scan the GT word column; return scan outcome plus word->tf map."""
+def scan_ground_truth(
+    parquet_path: Path,
+) -> tuple[GroundTruthScan, dict[str, int], dict[str, str]]:
+    """Scan the GT table; return scan outcome, word->tf map, and word->lemma map."""
     import pyarrow.parquet as pq
 
     scan = GroundTruthScan()
     gt_tf: dict[str, int] = {}
-    table = pq.read_table(parquet_path, columns=["word", "tf"])
+    gt_word_to_lemma: dict[str, str] = {}
+    table = pq.read_table(parquet_path, columns=["word", "lemma", "tf"])
     words = table.column("word").to_pylist()
+    lemmas = table.column("lemma").to_pylist()
     tfs = table.column("tf").to_pylist()
-    for word, tf_value in zip(words, tfs, strict=True):
+    for word, lemma, tf_value in zip(words, lemmas, tfs, strict=True):
+        w_str = str(word)
+        l_str = str(lemma)
         scan.words += 1
         scan.tf_total += int(tf_value)
-        gt_tf[str(word)] = int(tf_value)
-        if not is_valid_token(str(word)):
-            scan.invalid_words.append(str(word))
-    return scan, gt_tf
+        gt_tf[w_str] = int(tf_value)
+        gt_word_to_lemma[w_str] = l_str
+        if not is_valid_token(w_str):
+            scan.invalid_words.append(w_str)
+    return scan, gt_tf, gt_word_to_lemma
 
 
 def _rates_recompute_ok(entry: dict) -> bool:
@@ -189,7 +243,7 @@ def check_dist_dir(dist_dir: Path) -> GateReport:
         report.errors.append(f"unreadable corpus.zip: {err}")
         return report
     try:
-        report.gt, gt_tf = scan_ground_truth(parquet_path)
+        report.gt, gt_tf, gt_word_to_lemma = scan_ground_truth(parquet_path)
     except Exception as err:  # ArrowInvalid, ValueError (ragged columns), OSError
         report.errors.append(f"unreadable ground_truth.parquet: {err}")
         return report
@@ -223,6 +277,82 @@ def check_dist_dir(dist_dir: Path) -> GateReport:
     report.cross_checks["zero_fragments"] = (
         report.doc_violations == 0 and not report.gt.invalid_words
     )
+
+    # Compute telemetry across natural (non-paradigm) genres:
+    natural_scans = [scan for genre, scan in report.genres.items() if genre != PARADIGM_GENRE]
+    total_natural_docs = sum(s.docs for s in natural_scans)
+    total_natural_tokens = sum(s.tokens for s in natural_scans)
+    all_unique_hashes = set().union(*(s.unique_doc_hashes for s in natural_scans)) if natural_scans else set()
+    unique_doc_ratio = (len(all_unique_hashes) / total_natural_docs) if total_natural_docs > 0 else 1.0
+    mean_doc_len = (total_natural_tokens / total_natural_docs) if total_natural_docs > 0 else 0.0
+    total_sentence_terminators = sum(s.sentence_terminators for s in natural_scans)
+    words_per_sent = (total_natural_tokens / total_sentence_terminators) if total_sentence_terminators > 0 else 0.0
+
+    # Top-20 words analysis
+    sorted_words = sorted(gt_tf.items(), key=lambda item: item[1], reverse=True)
+    top_20 = [w for w, _ in sorted_words[:20]]
+    top20_func_count = sum(1 for w in top_20 if w in _CORE_POLISH_FUNCTION_WORDS)
+    content_word_spikes = [
+        (w, tf, tf / report.gt.tf_total)
+        for w, tf in sorted_words
+        if len(w) >= 6 and report.gt.tf_total > 0 and (tf / report.gt.tf_total) > 0.002
+    ]
+    max_content_spike = content_word_spikes[0] if content_word_spikes else None
+
+    # Lemma clustering diversity
+    non_identity_count = sum(1 for w, lem in gt_word_to_lemma.items() if w != lem)
+    lemma_cluster_ratio = (non_identity_count / len(gt_word_to_lemma)) if gt_word_to_lemma else 0.0
+
+    # Canary lemma probes
+    canary_violations: list[str] = []
+    canary_tested: int = 0
+    for probe_word, allowed_lemmas in CANARY_LEMMA_PROBES.items():
+        if probe_word in gt_word_to_lemma:
+            canary_tested += 1
+            actual = gt_word_to_lemma[probe_word]
+            if actual not in allowed_lemmas:
+                canary_violations.append(
+                    f"{probe_word} -> {actual!r} (expected one of {sorted(allowed_lemmas)})"
+                )
+
+    report.telemetry = {
+        "natural_docs": total_natural_docs,
+        "unique_docs": len(all_unique_hashes),
+        "unique_doc_ratio": unique_doc_ratio,
+        "mean_doc_len": mean_doc_len,
+        "words_per_sentence": words_per_sent,
+        "top20_function_words": top20_func_count,
+        "max_content_spike": max_content_spike,
+        "non_identity_lemma_ratio": lemma_cluster_ratio,
+        "canary_tested": canary_tested,
+        "canary_violations": canary_violations,
+    }
+
+    # Cross-check X5: Document uniqueness & length integrity
+    if total_natural_docs >= 50:
+        report.cross_checks["unique_natural_docs"] = (
+            unique_doc_ratio >= 0.995 and mean_doc_len >= 400.0
+        )
+    else:
+        report.cross_checks["unique_natural_docs"] = unique_doc_ratio >= 0.995
+
+    # Cross-check X6: Zipfian top-words sanity
+    if len(gt_tf) >= 20:
+        report.cross_checks["zipf_top_words_sanity"] = (
+            top20_func_count >= 14 and not bool(content_word_spikes)
+        )
+    else:
+        report.cross_checks["zipf_top_words_sanity"] = True
+
+    # Cross-check X7: Lemma clustering diversity
+    if len(gt_word_to_lemma) >= 50:
+        report.cross_checks["lemma_clustering_diversity"] = lemma_cluster_ratio >= 0.55
+    else:
+        report.cross_checks["lemma_clustering_diversity"] = True
+
+    # Cross-check X8: Morphological Canary Probes
+    report.cross_checks["canary_lemma_probes"] = len(canary_violations) == 0
+
     return report
 
 
@@ -230,9 +360,6 @@ def print_report(report: GateReport) -> None:
     """Print per-genre fragment counts, measured rates, and cross-checks."""
     for genre in sorted(report.genres):
         scan = report.genres[genre]
-        # Token-channel rate only (comparable to writer foreign_fragment_rate);
-        # char-level findings (foreign-char/digit-char/stripped-char) are counted
-        # separately below since they are not denominated in tokens.
         tok_viol = sum(1 for v in scan.violations if v.startswith("invalid-token"))
         rate = (tok_viol / scan.tokens) if scan.tokens else 0.0
         print(
@@ -256,6 +383,33 @@ def print_report(report: GateReport) -> None:
             f"digit={global_entry.get('digit_token_rate')} "
             f"dropped={global_entry.get('dropped_total')} kept={global_entry.get('tokens_kept')}"
         )
+
+    t = report.telemetry
+    if t:
+        print(
+            f"[Verify] telemetry: natural_docs={t['natural_docs']} "
+            f"unique_docs={t['unique_docs']} (ratio={t['unique_doc_ratio']:.4f}) "
+            f"mean_doc_len={t['mean_doc_len']:.1f} words_per_sent={t['words_per_sentence']:.1f}"
+        )
+        spike_str = (
+            f"{t['max_content_spike'][0]!r} (share={t['max_content_spike'][2]:.4f})"
+            if t["max_content_spike"]
+            else "none"
+        )
+        print(
+            f"[Verify] telemetry: top20_function_words={t['top20_function_words']}/20 "
+            f"max_content_word_spike={spike_str}"
+        )
+        print(
+            f"[Verify] telemetry: non_identity_lemma_ratio={t['non_identity_lemma_ratio']:.4f}"
+        )
+        print(
+            f"[Verify] telemetry: canary_probes_tested={t['canary_tested']} "
+            f"violations={len(t['canary_violations'])}"
+        )
+        for viol in t["canary_violations"][:10]:
+            print(f"[Verify]   canary violation: {viol}")
+
     for name, ok in report.cross_checks.items():
         print(f"[Verify] cross-check {name}: {'OK' if ok else 'MISMATCH'}")
     for error in report.errors:

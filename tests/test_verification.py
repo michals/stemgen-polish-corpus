@@ -273,4 +273,91 @@ def test_gate_passes_synthetic_clean_corpus(tmp_path) -> None:
     assert report.cross_checks["stored_counts_agree"]
     assert report.cross_checks["tokens_kept_agree"]
     assert report.cross_checks["rate_arithmetic_ok"]
+    assert report.cross_checks["unique_natural_docs"]
+    assert report.cross_checks["zipf_top_words_sanity"]
+    assert report.cross_checks["lemma_clustering_diversity"]
+    assert report.cross_checks["canary_lemma_probes"]
     assert gate.main(["--dist-dir", str(tmp_path)]) == 0
+
+
+def test_gate_flags_canary_violation_x8(tmp_path) -> None:
+    """Verify X8 flags morphological canary regressions."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    gate = _load_gate_script()
+    _write_synthetic_dist_dir(tmp_path, dirty=False)
+
+    # Overwrite GT with a canary word pointing to wrong lemma (e.g. mają -> 'maja')
+    table = pa.Table.from_arrays(
+        [
+            pa.array(["mają"], type=pa.string()),
+            pa.array(["maja"], type=pa.string()),  # Wrong! Expected 'mieć'
+            pa.array([1], type=pa.int64()),
+            pa.array([1], type=pa.int64()),
+        ],
+        names=["word", "lemma", "tf", "df"],
+    )
+    pq.write_table(table, tmp_path / "ground_truth.parquet", compression="zstd")
+
+    report = gate.check_dist_dir(tmp_path)
+    assert not report.cross_checks["canary_lemma_probes"]
+    assert not report.passed
+    assert any("mają -> 'maja'" in v for v in report.telemetry["canary_violations"])
+
+
+def test_gate_flags_duplicate_docs_x5(tmp_path) -> None:
+    """Verify X5 flags repeated duplicate documents."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    gate = _load_gate_script()
+    genre = "04_wikipedia"
+    doc_text = ("Ala ma kota. " * 100).strip()  # 300 words
+    # Write 60 identical documents
+    with zipfile.ZipFile(tmp_path / "corpus.zip", mode="w") as archive:
+        for i in range(60):
+            archive.writestr(f"{genre}/doc_{i:05d}.txt", doc_text)
+
+    words = [t.lower() for t in tokenize(doc_text)]
+    from collections import Counter
+    counts = Counter(words * 60)
+    w_list = list(counts.keys())
+    tf_list = [counts[w] for w in w_list]
+
+    table = pa.Table.from_arrays(
+        [
+            pa.array(w_list, type=pa.string()),
+            pa.array([f"lem_{w}" for w in w_list], type=pa.string()),
+            pa.array(tf_list, type=pa.int64()),
+            pa.array([60] * len(w_list), type=pa.int64()),
+        ],
+        names=["word", "lemma", "tf", "df"],
+    )
+    pq.write_table(table, tmp_path / "ground_truth.parquet", compression="zstd")
+    kept = sum(tf_list)
+    (tmp_path / "build_summary.json").write_text(
+        json.dumps(
+            {
+                "tier": "synthetic",
+                "audit_rates": {
+                    "global": {
+                        "foreign_fragment_rate": 0.0,
+                        "digit_token_rate": 0.0,
+                        "dropped_total": 0,
+                        "foreign_dropped": 0,
+                        "digit_dropped": 0,
+                        "tokens_kept": kept,
+                    },
+                    "per_genre": {},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = gate.check_dist_dir(tmp_path)
+    assert not report.cross_checks["unique_natural_docs"]
+    assert not report.passed
+    assert report.telemetry["unique_doc_ratio"] < 0.1
+

@@ -11,6 +11,7 @@ from .config import (
     LITERATURE_BOOKS,
     NEWS_DEV_URL,
     NEWS_TEST_URL,
+    NEWS_TRAIN_URL,
     NKJP1M_DEV_URL,
     NKJP1M_TRAIN_URL,
     POLIMORF_URL,
@@ -66,13 +67,15 @@ def get_nkjp1m_paths(force: bool = False) -> tuple[Path, Path]:
     return train, dev
 
 
-def get_news_paths(force: bool = False) -> tuple[Path, Path]:
+def get_news_paths(force: bool = False) -> tuple[Path, Path, Path]:
     """Ensure Polish news articles CSVs are downloaded."""
+    train = CACHE_DIR / "news_train.csv"
     dev = CACHE_DIR / "news_articles.csv"
     test = CACHE_DIR / "news_test.csv"
+    download_file(NEWS_TRAIN_URL, train, force=force)
     download_file(NEWS_DEV_URL, dev, force=force)
     download_file(NEWS_TEST_URL, test, force=force)
-    return dev, test
+    return train, dev, test
 
 
 def get_wikipedia_path(force: bool = False) -> Path:
@@ -87,7 +90,10 @@ def get_literature_dir(force: bool = False) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     for filename, url in LITERATURE_BOOKS:
         dest_file = dest_dir / filename
-        download_file(url, dest_file, force=force)
+        try:
+            download_file(url, dest_file, force=force)
+        except Exception as e:
+            print(f"[Warning] Failed to download {filename} from {url} ({e}). Continuing...")
     return dest_dir
 
 

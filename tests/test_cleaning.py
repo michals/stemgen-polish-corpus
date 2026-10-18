@@ -247,3 +247,36 @@ def test_empty_after_clean_skips_write_and_quota(tmp_path) -> None:
     writer2 = BalancedCorpusWriter(tmp_path / "corpus2.zip")
     assert writer2.add_documents_for_genre("04_wikipedia", iter(["2012", "Béziera"]), 3) == 0
     writer2.close()
+
+
+def test_trailing_punctuation_preserved_on_dropped_tokens() -> None:
+    """Verify sentence-ending and clause punctuation attached to dropped tokens survives."""
+    from polish_corpus.text_cleaning import audit_clean
+
+    # 1. Period preserved after digit year
+    cleaned, counts = audit_clean("Wpisane na listę w roku 1978. Wczoraj w ministerstwie.")
+    assert cleaned == "Wpisane na listę w roku. Wczoraj w ministerstwie."
+    assert counts.digit_dropped == 1
+    assert counts.foreign_dropped == 0
+    assert "1978" not in cleaned
+    assert tokenize(cleaned) == ["Wpisane", "na", "listę", "w", "roku", "Wczoraj", "w", "ministerstwie"]
+
+    # 2. Comma preserved after foreign city name
+    cleaned, counts = audit_clean("Mieszkał w Saint-Étienne, gdzie pracował.")
+    assert cleaned == "Mieszkał w, gdzie pracował."
+    assert counts.foreign_dropped == 1
+    assert "tienne" not in cleaned
+    assert tokenize(cleaned) == ["Mieszkał", "w", "gdzie", "pracował"]
+
+    # 3. Question mark preserved
+    cleaned, _ = audit_clean("Czy to rok 2020?")
+    assert cleaned == "Czy to rok?"
+
+    # 4. Exclamation mark preserved
+    cleaned, _ = audit_clean("Uwaga na COVID-19!")
+    assert cleaned == "Uwaga na!"
+
+    # 5. Colon and semicolon preserved
+    cleaned, _ = audit_clean("Spotkanie w café: zaczynamy.")
+    assert cleaned == "Spotkanie w: zaczynamy."
+

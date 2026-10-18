@@ -152,7 +152,15 @@ class BalancedCorpusWriter:
 
         self.doc_counts[genre] += 1
         filename = f"{genre}/paradigm_{batch_idx:04d}.txt"
-        text = " ".join(forms)
+
+        # Group forms into readable punctuated chunks of ~15 words ending in a period
+        # so downstream neural taggers (spaCy / Stanza) do not overflow sequence tagger buffers
+        chunks = []
+        chunk_size = 15
+        for i in range(0, len(forms), chunk_size):
+            slice_forms = forms[i : i + chunk_size]
+            chunks.append(", ".join(slice_forms) + ".")
+        text = "\n".join(chunks) + "\n"
 
         tokens = [t.lower() for t in forms]
         self.token_counts[genre] += len(tokens)

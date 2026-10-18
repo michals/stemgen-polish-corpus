@@ -125,8 +125,39 @@ def build_polish_corpus(
             cached_polimorf = CACHE_DIR / "polimorf-20260823.tab.gz"
             polimorf_path = cached_polimorf if cached_polimorf.exists() else None
 
-    # 2. Ingest dictionary (PoliMorf, SJP odm.zip, or bootstrap)
+    # 2. Ingest dictionary (core bootstrap baseline + PoliMorf/SJP)
     morfeusz = MorfeuszDictionary()
+    bootstrap_data = [
+        ("jest", "być", "fin"), ("są", "być", "fin"), ("był", "być", "praet"), ("była", "być", "praet"),
+        ("było", "być", "praet"), ("byli", "być", "praet"), ("będzie", "być", "bedzie"), ("będą", "być", "bedzie"),
+        ("być", "być", "inf"),
+        ("mam", "mieć", "fin"), ("ma", "mieć", "fin"), ("mają", "mieć", "fin"), ("miał", "mieć", "praet"),
+        ("miała", "mieć", "praet"), ("mieli", "mieć", "praet"), ("mieć", "mieć", "inf"), ("mając", "mieć", "pcon"),
+        ("człowiek", "człowiek", "subst"), ("ludzie", "człowiek", "subst"), ("ludzi", "człowiek", "subst"),
+        ("dzień", "dzień", "subst"), ("dnia", "dzień", "subst"), ("dni", "dzień", "subst"),
+        ("rok", "rok", "subst"), ("lata", "rok", "subst"), ("lat", "rok", "subst"), ("latach", "rok", "subst"),
+        ("ręka", "ręka", "subst"), ("ręce", "ręka", "subst"), ("rąk", "ręka", "subst"),
+        ("miasto", "miasto", "subst"), ("miasta", "miasto", "subst"), ("miast", "miasto", "subst"),
+        ("nowy", "nowy", "adj"), ("nowa", "nowy", "adj"), ("nowe", "nowy", "adj"), ("nowych", "nowy", "adj"),
+        ("dobry", "dobry", "adj"), ("dobra", "dobry", "adj"), ("dobre", "dobry", "adj"), ("lepszy", "dobry", "adj"),
+        ("robić", "robić", "inf"), ("robi", "robić", "fin"), ("robią", "robić", "fin"),
+        ("mówić", "mówić", "inf"), ("mówi", "mówić", "fin"), ("mówią", "mówić", "fin"),
+        ("iść", "iść", "inf"), ("idzie", "iść", "fin"), ("idą", "iść", "fin"), ("szedł", "iść", "praet"),
+        ("stary", "stary", "adj"), ("stara", "stary", "adj"), ("stare", "stary", "adj"),
+        ("starszy", "stary", "adj"), ("starszych", "stary", "adj"),
+        ("ważny", "ważny", "adj"), ("ważna", "ważny", "adj"), ("ważne", "ważny", "adj"), ("ważniejsze", "ważny", "adj"),
+        ("duży", "duży", "adj"), ("większy", "duży", "adj"), ("większe", "duży", "adj"),
+        ("badać", "badać", "inf"), ("bada", "badać", "fin"), ("badają", "badać", "fin"),
+        ("badanie", "badać", "ger"), ("badania", "badać", "ger"), ("badaniach", "badać", "ger"),
+        ("zadać", "zadać", "inf"), ("zadanie", "zadać", "ger"), ("zadania", "zadać", "ger"),
+        ("związać", "związać", "inf"), ("związany", "związać", "ppas"), ("związane", "związać", "ppas"),
+        ("wpisać", "wpisać", "inf"), ("wpisany", "wpisać", "ppas"), ("wpisane", "wpisać", "ppas"),
+        ("wystarczać", "wystarczać", "inf"), ("wystarczający", "wystarczać", "pact"), ("wystarczające", "wystarczać", "pact"),
+    ]
+    for form, lemma, _pos in bootstrap_data:
+        morfeusz.word_to_lemmas[form][lemma] += 1
+        morfeusz.lemma_to_forms[lemma].add(form)
+
     if polimorf_path and polimorf_path.exists() and polimorf_path.stat().st_size > 0:
         max_rows = 50_000 if quick_test else None
         morfeusz.ingest_polimorf(polimorf_path, max_rows=max_rows, verbose=True)
@@ -135,23 +166,6 @@ def build_polish_corpus(
         morfeusz.ingest_sjp_odm(sjp_path, max_lines=max_lines, verbose=True)
     else:
         print("[Notice] Using internal core Polish morphological bootstrap for dictionary...")
-        bootstrap_data = [
-            ("jest", "być", "fin"), ("są", "być", "fin"), ("był", "być", "praet"), ("była", "być", "praet"),
-            ("będzie", "być", "bedzie"), ("będą", "być", "bedzie"), ("być", "być", "inf"),
-            ("człowiek", "człowiek", "subst"), ("ludzie", "człowiek", "subst"), ("ludzi", "człowiek", "subst"),
-            ("dzień", "dzień", "subst"), ("dnia", "dzień", "subst"), ("dni", "dzień", "subst"),
-            ("rok", "rok", "subst"), ("lata", "rok", "subst"), ("lat", "rok", "subst"),
-            ("ręka", "ręka", "subst"), ("ręce", "ręka", "subst"), ("rąk", "ręka", "subst"),
-            ("miasto", "miasto", "subst"), ("miasta", "miasto", "subst"), ("miast", "miasto", "subst"),
-            ("nowy", "nowy", "adj"), ("nowa", "nowy", "adj"), ("nowe", "nowy", "adj"), ("nowych", "nowy", "adj"),
-            ("dobry", "dobry", "adj"), ("dobra", "dobry", "adj"), ("dobre", "dobry", "adj"),
-            ("robić", "robić", "inf"), ("robi", "robić", "fin"), ("robią", "robić", "fin"),
-            ("mówić", "mówić", "inf"), ("mówi", "mówić", "fin"), ("mówią", "mówić", "fin"),
-            ("iść", "iść", "inf"), ("idzie", "iść", "fin"), ("idą", "iść", "fin"), ("szedł", "iść", "praet"),
-        ]
-        for form, lemma, _pos in bootstrap_data:
-            morfeusz.word_to_lemmas[form][lemma] += 1
-            morfeusz.lemma_to_forms[lemma].add(form)
 
     # 3. Stream balanced documents into corpus.zip
     corpus_zip_path = out_dir / "corpus.zip"
@@ -174,19 +188,20 @@ def build_polish_corpus(
         if stream_fn and not quick_test:
             doc_iter = stream_fn(genre_docs)
             added_docs = writer.add_documents_for_genre(genre, doc_iter, genre_docs)
-
-        if added_docs < genre_docs:
-            missing = genre_docs - added_docs
-            if not quick_test and missing > 0:
-                print(f"  [Notice] {genre} added {added_docs}/{genre_docs} docs; completing with {missing} seed documents.")
-            fallback_iter = iter(generate_seed_documents(genre, missing))
-            added_docs += writer.add_documents_for_genre(genre, fallback_iter, missing)
+            if added_docs < genre_docs:
+                print(
+                    f"  [Warning] {genre} exhausted upstream source at "
+                    f"{added_docs:,}/{genre_docs:,} docs (NO seed padding applied)."
+                )
+        elif quick_test:
+            fallback_iter = iter(generate_seed_documents(genre, genre_docs))
+            added_docs = writer.add_documents_for_genre(genre, fallback_iter, genre_docs)
 
         print(f"  + Added {added_docs:,} docs for {genre}")
 
     # 4. Resolve homonyms using corpus term frequencies
     print("\n[CorpusBuilder] Resolving homonyms using corpus frequencies...")
-    morfeusz.resolve_homonyms(lemma_frequency_fn=lambda lem: writer.term_freq.get(lem, 0))
+    morfeusz.resolve_homonyms(corpus_term_freq=writer.term_freq)
 
     # 5. Morfeusz Paradigm Completion (Step 4 of Strategy)
     top_n_lemmas = 50 if quick_test else tier.top_lemmas_for_paradigms
@@ -206,7 +221,7 @@ def build_polish_corpus(
     print("\n[CorpusBuilder] Building Ground Truth table (word, lemma, tf, df)...")
     gt_records: list[tuple[str, str, int, int]] = []
     for word, tf in writer.term_freq.items():
-        lemma = morfeusz.dominant_lemma.get(word, word)
+        lemma = morfeusz.lookup_lemma(word)
         df = writer.doc_freq.get(word, 1)
         gt_records.append((word, lemma, tf, df))
 

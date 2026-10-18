@@ -35,6 +35,7 @@ SNOWBALL_POLISH_VOC_URL = "https://raw.githubusercontent.com/snowballstem/snowba
 # URLs for Corpus Text Sources
 NKJP1M_TRAIN_URL = "https://huggingface.co/datasets/ipipan/nkjp1m/resolve/main/nkjp1m_train.jsonl.gz"
 NKJP1M_DEV_URL = "https://huggingface.co/datasets/ipipan/nkjp1m/resolve/main/nkjp1m_dev.jsonl.gz"
+NEWS_TRAIN_URL = "https://huggingface.co/datasets/allegro/summarization-polish-summaries-corpus/resolve/main/whole/train.csv"
 NEWS_DEV_URL = "https://huggingface.co/datasets/allegro/summarization-polish-summaries-corpus/resolve/main/whole/dev.csv"
 NEWS_TEST_URL = "https://huggingface.co/datasets/allegro/summarization-polish-summaries-corpus/resolve/main/whole/test.csv"
 WIKINEURAL_PL_URL = "https://huggingface.co/datasets/Babelscape/wikineural/resolve/main/train_pl.jsonl"
@@ -43,9 +44,33 @@ LITERATURE_BOOKS = [
     ("lalka_1.txt", "https://wolnelektury.pl/media/book/txt/lalka-tom-pierwszy.txt"),
     ("lalka_2.txt", "https://wolnelektury.pl/media/book/txt/lalka-tom-drugi.txt"),
     ("faraon_1.txt", "https://wolnelektury.pl/media/book/txt/faraon-tom-pierwszy.txt"),
+    ("faraon_2.txt", "https://wolnelektury.pl/media/book/txt/faraon-tom-drugi.txt"),
+    ("faraon_3.txt", "https://wolnelektury.pl/media/book/txt/faraon-tom-trzeci.txt"),
     ("krzyzacy_1.txt", "https://wolnelektury.pl/media/book/txt/krzyzacy-tom-pierwszy.txt"),
+    ("krzyzacy_2.txt", "https://wolnelektury.pl/media/book/txt/krzyzacy-tom-drugi.txt"),
+    ("potop_1.txt", "https://wolnelektury.pl/media/book/txt/potop-tom-pierwszy.txt"),
+    ("potop_2.txt", "https://wolnelektury.pl/media/book/txt/potop-tom-drugi.txt"),
+    ("potop_3.txt", "https://wolnelektury.pl/media/book/txt/potop-tom-trzeci.txt"),
+    ("ogniem_i_mieczem_1.txt", "https://wolnelektury.pl/media/book/txt/ogniem-i-mieczem-tom-pierwszy.txt"),
+    ("ogniem_i_mieczem_2.txt", "https://wolnelektury.pl/media/book/txt/ogniem-i-mieczem-tom-drugi.txt"),
+    ("pan_wolodyjowski.txt", "https://wolnelektury.pl/media/book/txt/pan-wolodyjowski.txt"),
     ("quo_vadis.txt", "https://wolnelektury.pl/media/book/txt/quo-vadis.txt"),
     ("chlopi_1.txt", "https://wolnelektury.pl/media/book/txt/chlopi-czesc-pierwsza-jesien.txt"),
+    ("chlopi_2.txt", "https://wolnelektury.pl/media/book/txt/reymont-chlopi-zima.txt"),
+    ("chlopi_3.txt", "https://wolnelektury.pl/media/book/txt/chlopi-czesc-trzecia-wiosna.txt"),
+    ("chlopi_4.txt", "https://wolnelektury.pl/media/book/txt/chlopi-czesc-czwarta-lato.txt"),
+    ("przedwiosnie.txt", "https://wolnelektury.pl/media/book/txt/przedwiosnie.txt"),
+    ("ludzie_bezdomni_1.txt", "https://wolnelektury.pl/media/book/txt/ludzie-bezdomni-tom-pierwszy.txt"),
+    ("ludzie_bezdomni_2.txt", "https://wolnelektury.pl/media/book/txt/ludzie-bezdomni-tom-drugi.txt"),
+    ("ziemia_obiecana_1.txt", "https://wolnelektury.pl/media/book/txt/ziemia-obiecana-tom-pierwszy.txt"),
+    ("nad_niemnem_1.txt", "https://wolnelektury.pl/media/book/txt/nad-niemnem-tom-pierwszy.txt"),
+    ("nad_niemnem_2.txt", "https://wolnelektury.pl/media/book/txt/nad-niemnem-tom-drugi.txt"),
+    ("nad_niemnem_3.txt", "https://wolnelektury.pl/media/book/txt/nad-niemnem-tom-trzeci.txt"),
+    ("sklepy_cynamonowe.txt", "https://wolnelektury.pl/media/book/txt/sklepy-cynamonowe-sklepy-cynamonowe.txt"),
+    ("wesele.txt", "https://wolnelektury.pl/media/book/txt/wesele.txt"),
+    ("moralnosc_pani_dulskiej.txt", "https://wolnelektury.pl/media/book/txt/moralnosc-pani-dulskiej.txt"),
+    ("zemsta.txt", "https://wolnelektury.pl/media/book/txt/zemsta.txt"),
+    ("kordian.txt", "https://wolnelektury.pl/media/book/txt/kordian.txt"),
     ("pan_tadeusz.txt", "https://wolnelektury.pl/media/book/txt/pan-tadeusz.txt"),
 ]
 
@@ -78,11 +103,13 @@ CORE_POS_TAGS = {
 }
 
 # Subdirectory genre layout and nominal token shares
+# 20% spoken/dialogue, 35% literature/prose/drama, 25% news, 20% wikipedia
+# Maximizes 1st/2nd person verb diversity while fitting strictly within authentic sources
 GENRE_CONFIG = {
-    "01_nkjp_spoken_forum": {"share": 0.25, "target_doc_words": 500},
-    "02_nkjp_literature":   {"share": 0.20, "target_doc_words": 500},
-    "03_nkjp_news":         {"share": 0.15, "target_doc_words": 500},
-    "04_wikipedia":         {"share": 0.40, "target_doc_words": 500},
+    "01_nkjp_spoken_forum": {"share": 0.20, "target_doc_words": 500},
+    "02_nkjp_literature":   {"share": 0.35, "target_doc_words": 500},
+    "03_nkjp_news":         {"share": 0.25, "target_doc_words": 500},
+    "04_wikipedia":         {"share": 0.20, "target_doc_words": 500},
 }
 
 
@@ -97,20 +124,20 @@ class TierConfig:
 TIERS = {
     "sm": TierConfig(
         name="sm",
-        target_tokens=2_200_000,
-        target_docs=4_400,
+        target_tokens=1_500_000,
+        target_docs=3_000,
         top_lemmas_for_paradigms=5_000,
     ),
     "md": TierConfig(
         name="md",
-        target_tokens=5_150_000,
-        target_docs=10_100,
+        target_tokens=3_500_000,
+        target_docs=6_500,
         top_lemmas_for_paradigms=10_000,
     ),
     "lg": TierConfig(
         name="lg",
-        target_tokens=12_500_000,
-        target_docs=25_000,
+        target_tokens=5_500_000,
+        target_docs=10_000,
         top_lemmas_for_paradigms=15_000,
     ),
 }

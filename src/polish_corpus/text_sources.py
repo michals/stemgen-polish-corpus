@@ -84,11 +84,27 @@ def iter_spoken_forum_docs(max_docs: int) -> Iterator[str]:
     """Yield natural ~500-word documents for 01_nkjp_spoken_forum."""
     train_path = CACHE_DIR / "nkjp1m_train.jsonl.gz"
     dev_path = CACHE_DIR / "nkjp1m_dev.jsonl.gz"
+    lit_dir = CACHE_DIR / "literature"
 
     def _sentences():
         spoken_prefixes = ("6", "7", "4", "sca", "Supe")
         yield from _stream_nkjp_sentences(train_path, spoken_prefixes)
         yield from _stream_nkjp_sentences(dev_path, spoken_prefixes)
+
+        # Wolne Lektury dramatic dialogue & conversational turns:
+        # dialogue lines in classic literature and plays (e.g. Wesele, Zemsta, Dulska)
+        # enrich 01_nkjp_spoken_forum with genuine 1st/2nd person conversational text.
+        if lit_dir.exists():
+            for book_file in sorted(lit_dir.glob("*.txt")):
+                with open(book_file, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line == "-----":
+                            break
+                        if _is_boilerplate(line):
+                            continue
+                        if line.startswith(("—", "–", "-")) and len(line) > 15:
+                            yield line
 
     count = 0
     seen: set[str] = set()
@@ -119,6 +135,8 @@ def iter_literature_docs(max_docs: int) -> Iterator[str]:
                 with open(book_file, encoding="utf-8", errors="replace") as f:
                     for line in f:
                         line = line.strip()
+                        if line == "-----":
+                            break
                         if _is_boilerplate(line):
                             continue
                         if len(line) > 20:
@@ -148,11 +166,12 @@ def iter_literature_docs(max_docs: int) -> Iterator[str]:
 
 def iter_news_docs(max_docs: int) -> Iterator[str]:
     """Yield natural ~500-word documents for 03_nkjp_news from news corpus & NKJP press."""
+    news_csv_train = CACHE_DIR / "news_train.csv"
     news_csv_1 = CACHE_DIR / "news_articles.csv"
     news_csv_2 = CACHE_DIR / "news_test.csv"
 
     def _articles():
-        for csv_path in (news_csv_1, news_csv_2):
+        for csv_path in (news_csv_train, news_csv_1, news_csv_2):
             if csv_path.exists():
                 with open(csv_path, encoding="utf-8", errors="replace") as f:
                     reader = csv.reader(f)

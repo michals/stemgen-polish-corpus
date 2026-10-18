@@ -31,7 +31,7 @@ def complete_paradigms(
     # Calculate lemma frequencies from existing corpus term frequencies
     lemma_freq: dict[str, int] = {}
     for word, tf in writer.term_freq.items():
-        lemma = morfeusz.dominant_lemma.get(word)
+        lemma = morfeusz.lookup_lemma(word)
         if lemma:
             lemma_freq[lemma] = lemma_freq.get(lemma, 0) + tf
 

@@ -185,16 +185,56 @@ class MorfeuszDictionary:
                 f"{len(self.lemma_to_forms):,} base lemmas."
             )
 
+    @staticmethod
+    def _filter_derivational_self_lemmas(word: str, candidates: list[str]) -> list[str]:
+        """Prefer verbal base lemmas over productive gerund/participle self-lemmas."""
+        if len(candidates) <= 1:
+            return candidates
+        verb_cands = [
+            lem
+            for lem in candidates
+            if lem.endswith(("ć", "c")) and lem != word and len(lem) >= 3
+        ]
+        if not verb_cands:
+            return candidates
+        # If non-verb candidates are purely participial (-ący, -any, -ony, -ty, -ły) or gerund (-nie, -cie),
+        # prefer the parent verb lemma so the entire inflectional paradigm stays unified.
+        non_deriv = [
+            lem
+            for lem in candidates
+            if lem in verb_cands
+            or not lem.endswith(("nie", "cie", "ący", "any", "ony", "ty", "ły"))
+        ]
+        return non_deriv if non_deriv else verb_cands
+
     def resolve_homonyms(
         self,
+        corpus_term_freq: Callable[[str], int] | dict[str, int] | Counter[str] | None = None,
         lemma_frequency_fn: Callable[[str], int] | None = None,
     ) -> dict[str, str]:
-        """Resolve surface homonyms to a single dominant lemma (1 word -> 1 lemma).
+        """Resolve surface homonyms to a single dominant lemma (1 word -> 1 lemma) using Family Mass."""
+        tf_fn: Callable[[str], int] | None = None
+        if isinstance(corpus_term_freq, (dict, Counter)):
+            def tf_fn(w: str) -> int:
+                return corpus_term_freq.get(w, 0)
+        elif callable(corpus_term_freq):
+            tf_fn = corpus_term_freq
+        elif callable(lemma_frequency_fn):
+            tf_fn = lemma_frequency_fn
 
-        If lemma_frequency_fn is provided, selects the candidate lemma with the highest
-        corpus frequency. Otherwise breaks ties using dictionary analysis count,
-        favoring lemma == word when applicable.
-        """
+        # 1. Precompute fractional family token mass for every lemma across the corpus
+        lemma_family_mass: dict[str, float] = defaultdict(float)
+        if tf_fn is not None:
+            for w, lem_counter in self.word_to_lemmas.items():
+                w_tf = tf_fn(w)
+                if w_tf <= 0:
+                    continue
+                # Filter out self-derivational gerund/participle lemmas when a shorter verb lemma exists
+                cands = self._filter_derivational_self_lemmas(w, list(lem_counter.keys()))
+                share = w_tf / len(cands)
+                for lem in cands:
+                    lemma_family_mass[lem] += share
+
         self.dominant_lemma.clear()
 
         for word, lemma_counter in self.word_to_lemmas.items():
@@ -202,28 +242,71 @@ class MorfeuszDictionary:
                 self.dominant_lemma[word] = next(iter(lemma_counter.keys()))
                 continue
 
-            candidates = list(lemma_counter.keys())
-            if lemma_frequency_fn:
-                # Rank by external corpus lemma frequency, then internal analysis frequency
+            candidates = self._filter_derivational_self_lemmas(word, list(lemma_counter.keys()))
+            if len(candidates) == 1:
+                self.dominant_lemma[word] = candidates[0]
+                continue
+
+            if tf_fn is not None:
+                # Rank by:
+                # 1. Family token mass across corpus inflections
+                # 2. Surface lemma frequency
+                # 3. Internal dictionary analysis count
+                # 4. Identity fallback (lem == word) as final tie-breaker only
                 best = max(
                     candidates,
                     key=lambda lem: (
-                        lemma_frequency_fn(lem),
-                        1 if lem == word else 0,
+                        lemma_family_mass.get(lem, 0.0),
+                        tf_fn(lem),
                         lemma_counter[lem],
+                        1 if lem == word else 0,
                     ),
                 )
             else:
                 best = max(
                     candidates,
                     key=lambda lem: (
-                        1 if lem == word else 0,
+                        len(self.lemma_to_forms.get(lem, ())),
                         lemma_counter[lem],
+                        1 if lem == word else 0,
                     ),
                 )
             self.dominant_lemma[word] = best
 
         return self.dominant_lemma
+
+    def lookup_lemma(self, word: str) -> str:
+        """Resolve word to its dominant lemma with productive prefix & compound fallback."""
+        w = word.lower()
+        direct = self.dominant_lemma.get(w)
+        if direct is not None:
+            return direct
+
+        # 1. Superlative prefix 'naj-' (not tabulated in raw PoliMorf)
+        if w.startswith("naj") and len(w) >= 6:
+            rem = w[3:]
+            if rem in self.dominant_lemma:
+                return self.dominant_lemma[rem]
+
+        # 2. Negation prefix 'nie-' on participles/adjectives/gerunds
+        if w.startswith("nie") and len(w) >= 6:
+            rem = w[3:]
+            if rem in self.dominant_lemma:
+                base_lem = self.dominant_lemma[rem]
+                # If base is a verb, keep unified with verb; if adj/adv/subst, prefix 'nie'
+                if base_lem.endswith(("ć", "c")):
+                    return base_lem
+                return "nie" + base_lem
+
+        # 3. Hyphenated compounds (e.g. 'środkowo-wschodniej' -> 'środkowo-wschodni')
+        if "-" in w:
+            parts = w.split("-")
+            head = parts[-1]
+            head_lem = self.dominant_lemma.get(head)
+            if head_lem is not None:
+                return "-".join([*parts[:-1], head_lem])
+
+        return w
 
     def get_paradigm(self, lemma_lower: str) -> set[str]:
         """Return all standard inflected forms for a lemma."""
