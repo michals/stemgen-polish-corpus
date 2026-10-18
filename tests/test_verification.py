@@ -197,8 +197,8 @@ def test_audit_row_leaves_no_salvage(
 
 
 def _load_gate_script():
-    """Import scripts/verify_zero_fragments.py without argparse side effects."""
-    path = Path(__file__).resolve().parent.parent / "scripts" / "verify_zero_fragments.py"
+    """Import src/verify_zero_fragments.py without argparse side effects."""
+    path = Path(__file__).resolve().parent.parent / "src" / "verify_zero_fragments.py"
     spec = importlib.util.spec_from_file_location("verify_zero_fragments", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
