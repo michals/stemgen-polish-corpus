@@ -100,6 +100,13 @@ CORE_POS_TAGS = {
     "ppron12", # 1st and 2nd person pronouns (ja, ty, my, wy)
     "ppron3",  # 3rd person pronouns (on, ona, oni)
     "siebie",  # Reflexive pronoun (siebie, się)
+    "prep",    # Prepositions
+    "conj",    # Conjunctions
+    "comp",    # Subordinating conjunctions / comparatives
+    "part",    # Particles
+    "qub",     # Quasi-particles / question particles
+    "pred",    # Predicatives
+    "interj",  # Interjections
 }
 
 # Subdirectory genre layout and nominal token shares

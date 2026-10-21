@@ -81,6 +81,10 @@ CANARY_LEMMA_PROBES: dict[str, set[str]] = {
     "lata": {"rok"},
     "latach": {"rok"},
     "dnia": {"dzień"},
+    # Function words preserved with identity lemmas:
+    "nie": {"nie"},
+    "od": {"od"},
+    "lecz": {"lecz"},
 }
 
 

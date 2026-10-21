@@ -153,6 +153,10 @@ def build_polish_corpus(
         ("związać", "związać", "inf"), ("związany", "związać", "ppas"), ("związane", "związać", "ppas"),
         ("wpisać", "wpisać", "inf"), ("wpisany", "wpisać", "ppas"), ("wpisane", "wpisać", "ppas"),
         ("wystarczać", "wystarczać", "inf"), ("wystarczający", "wystarczać", "pact"), ("wystarczające", "wystarczać", "pact"),
+        ("nie", "nie", "qub"), ("od", "od", "prep"), ("lecz", "lecz", "conj"), ("bez", "bez", "prep"),
+        ("mimo", "mimo", "prep"), ("lub", "lub", "conj"), ("albo", "albo", "conj"), ("czy", "czy", "qub"),
+        ("na", "na", "prep"), ("po", "po", "prep"), ("za", "za", "prep"), ("przy", "przy", "prep"),
+        ("nad", "nad", "prep"), ("pod", "pod", "prep"), ("przed", "przed", "prep"), ("przez", "przez", "prep"),
     ]
     for form, lemma, _pos in bootstrap_data:
         morfeusz.word_to_lemmas[form][lemma] += 1
